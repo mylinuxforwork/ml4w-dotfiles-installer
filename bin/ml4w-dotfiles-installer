@@ -11,6 +11,9 @@ fi
 source "$LIB_DIR/colors.sh"
 source "$LIB_DIR/utils.sh"
 
+# Default Target Directory
+DOTFILES_DIR="$HOME/.mydotfiles-test"
+
 # 3. Global Cleanup Trap
 cleanup() {
     if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
@@ -25,46 +28,74 @@ show_help() {
     echo "Usage: ml4w-dotfiles-installer [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  --install <url>    Install dotfiles from a .dotinst URL"
-    echo "  --help             Show this help message"
+    echo "  --install <url>     Install dotfiles from a .dotinst URL"
+    echo "  --target <path>     Target directory (Default: $HOME/.mydotfiles-test)"
+    echo "  --help              Show this help message"
 }
 
 # 5. Argument Parsing
+if [ $# -eq 0 ]; then
+    show_help
+    exit 0
+fi
+
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --install) INSTALL_URL="$2"; shift 2 ;;
-        --help) show_help; exit 0 ;;
-        *) error "Unknown option: $1"; exit 1 ;;
+        --install)
+            INSTALL_URL="$2"
+            shift 2 ;;
+        --target)
+            DOTFILES_DIR="$(mkdir -p "$2" && cd "$2" && pwd)"
+            shift 2 ;;
+        --help)
+            show_help
+            exit 0 ;;
+        *)
+            error "Unknown option: $1"
+            show_help
+            exit 1 ;;
     esac
 done
 
 # 6. Execute Logic
 [ -z "$INSTALL_URL" ] && { show_help; exit 0; }
 
-# Step A: Ensure core tools are present
 check_dependencies
 
-# Step B: Fetch .dotinst and Clone repo
+# Step B: Read configuration and clone repo
 RESULT=$(read_dotinst "$INSTALL_URL")
-CLONE_PATH=$(echo "$RESULT" | cut -d' ' -f1)
-INSTALL_EXEC=$(echo "$RESULT" | cut -d' ' -f2)
+CLONE_PATH=$(echo "$RESULT" | awk '{print $1}')
+PROFILE_ID=$(echo "$RESULT" | awk '{print $2}')
 
-if [ -d "$CLONE_PATH" ]; then
-    info "Repository prepared at: $CLONE_PATH"
+if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
+    info "Repository prepared. Starting package setup..."
     
-    # Step C: Run the complex dependency logic (Preflight + Packages)
+    # Step C: Run dependency logic
     run_setup_logic "$CLONE_PATH"
     
-    info "Dependency installation completed."
-    
-    # Step D: Final Execution of the Dotfiles Install Script
-    if [ -f "$CLONE_PATH/$INSTALL_EXEC" ]; then
-        info "Starting main installation: $INSTALL_EXEC"
-        cd "$CLONE_PATH" && bash "$INSTALL_EXEC"
+    # Step D: Move dotfiles to the final directory
+    FINAL_TARGET="$DOTFILES_DIR/$PROFILE_ID"
+    info "Deploying dotfiles to $FINAL_TARGET..."
+
+    mkdir -p "$FINAL_TARGET"
+
+    if [ -d "$CLONE_PATH/dotfiles" ]; then
+        if cp -a "$CLONE_PATH/dotfiles/." "$FINAL_TARGET/"; then
+            info "Successfully installed $PROFILE_ID dotfiles to $FINAL_TARGET."
+            
+            # Step E: Create symlinks from the local copy to $HOME
+            deploy_symlinks "$FINAL_TARGET" "$DOTFILES_DIR"
+            
+            info "Installation successful!"
+        else
+            error "Failed to copy dotfiles to $FINAL_TARGET."
+            exit 1
+        fi
     else
-        warn "Main install script $INSTALL_EXEC not found in repo."
+        error "Source folder 'dotfiles' not found in cloned repository."
+        exit 1
     fi
 else
-    error "Installation failed: Could not prepare temporary repository."
+    error "Installation failed: Repository environment could not be initialized."
     exit 1
 fi
