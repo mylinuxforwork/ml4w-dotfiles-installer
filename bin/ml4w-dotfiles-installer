@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+# 1. Determine the Library Path
+if [ -d "$(dirname "$0")/../lib" ]; then
+    LIB_DIR="$(cd "$(dirname "$0")/../lib" && pwd)"
+else
+    LIB_DIR="$HOME/.local/share/ml4w-dotfiles-installer"
+fi
+
+# 2. Source Modules
+source "$LIB_DIR/colors.sh"
+source "$LIB_DIR/utils.sh"
+
+# 3. Run the Dependency Checks
+# This will now check/install make, git, and gum
+check_dependencies
+
+# 4. Success! Now you can use gum for the rest of your script
+info "All dependencies met."
+gum spin --spinner dot --title "Starting the ML4W Experience..." -- sleep 2
