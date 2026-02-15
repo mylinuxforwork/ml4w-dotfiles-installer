@@ -80,11 +80,13 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
 
     FINAL_TARGET="$DOTFILES_DIR/$PROFILE_ID"
 
-    # --- Step B.5: Restore Logic (ONLY for Updates) ---
+    # --- Step B.5: Update-specific Logic (Backup & Restore) ---
     if [ -d "$FINAL_TARGET" ]; then
+        # 1. Backup the existing sandbox folder before any changes
+        backup_existing_profile "$FINAL_TARGET" "$PROFILE_ID" "$DOTFILES_DIR"
+
+        # 2. Restore logic
         DOTINST_JSON=$(curl -sL "$INSTALL_URL")
-        
-        # Check if the restore section exists and is not empty
         RESTORE_COUNT=$(echo "$DOTINST_JSON" | jq '.restore | length' 2>/dev/null)
         
         if [ "$RESTORE_COUNT" != "null" ] && [ "$RESTORE_COUNT" -gt 0 ]; then

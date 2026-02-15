@@ -5,20 +5,38 @@ info() { echo -e "${GREEN}[INFO]${NC} $1" >&2; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
 error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 
+# --- NEW: Profile Backup ---
+# usage: backup_existing_profile <profile_dir> <id> <backup_root>
+backup_existing_profile() {
+    local profile_dir=$1
+    local id=$2
+    local backup_root=$3
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local backup_path="$backup_root/backups/profile-updates/$id/$timestamp"
+
+    info "Backing up current profile state to $backup_path..."
+    mkdir -p "$(dirname "$backup_path")"
+    
+    # Copy the entire ID directory to the timestamped folder
+    if cp -a "$profile_dir" "$backup_path"; then
+        info "  - Backup completed successfully."
+    else
+        warn "  - Backup failed! Proceeding with caution..."
+    fi
+}
+
 # --- Restore Orchestrator ---
 handle_restore_logic() {
     local json=$1
     local existing_dir=$2
     local temp_dir=$3
 
-    # Extract formatted list for gum: Title [source/path]
     local restore_data=$(echo "$json" | jq -r '.restore[] | "\(.title) [\(.source)]"' 2>/dev/null)
     
     if [ -z "$restore_data" ]; then
         return 0
     fi
 
-    # Pre-select everything by default
     local selected_default=$(echo "$restore_data" | paste -sd "," -)
     
     info "Existing configuration found. Select items to keep (Restore):"
@@ -31,13 +49,9 @@ handle_restore_logic() {
         return 0
     fi
 
-    # Perform the merge
     info "Merging custom configurations..."
     while IFS= read -r selection; do
-        # Extract the title by removing the bracketed source part
         local title=$(echo "$selection" | sed 's/ \[.*\]$//')
-        
-        # Get the source path for this title from the JSON
         local rel_src=$(echo "$json" | jq -r ".restore[] | select(.title==\"$title\") | .source")
         
         local src_path="$existing_dir/$rel_src"
@@ -128,7 +142,7 @@ deploy_symlinks() {
     local source_dir=$1
     local backup_root=$2
     local timestamp=$(date +%Y%m%d_%H%M%S)
-    local backup_dir="$backup_root/backups/$timestamp"
+    local backup_dir="$backup_root/backups/symlinks/$timestamp"
 
     info "Starting symlink deployment..."
 

@@ -17,13 +17,16 @@ An authentic, modular, and safe way to deploy Linux configurations. This script 
 
 To install the installer script to your local system:
 
-1.  **Clone the repository.**
-2.  **Run the installation:**
-    ```bash
-    make install
-    ```
-3.  **Ensure your PATH includes local bins:**
-    Make sure `~/.local/bin` is in your environment `$PATH`.
+1. **Clone the repository.**
+2. **Run the installation:**
+```bash
+make install
+
+```
+
+
+3. **Ensure your PATH includes local bins:**
+Make sure `~/.local/bin` is in your environment `$PATH`.
 
 ---
 
@@ -32,7 +35,7 @@ To install the installer script to your local system:
 To install a dotfiles profile using a `.dotinst` URL:
 
 ```bash
-ml4w-dotfiles-installer --install [https://raw.githubusercontent.com/user/repo/main/profile.dotinst](https://raw.githubusercontent.com/user/repo/main/profile.dotinst)
+ml4w-dotfiles-installer --install https://raw.githubusercontent.com/user/repo/main/profile.dotinst
 
 ```
 
@@ -47,7 +50,9 @@ ml4w-dotfiles-installer --install [https://raw.githubusercontent.com/user/repo/m
 
 The installer parses a JSON-formatted `.dotinst` file to understand how to handle the repository.
 
-### Template
+### Template with Restore Options
+
+The `restore` array allows you to define specific files or folders that the user can choose to keep from their existing installation when they run an update.
 
 ```json
 {
@@ -55,13 +60,34 @@ The installer parses a JSON-formatted `.dotinst` file to understand how to handl
   "id": "hyprland-stable",
   "version": "1.0.0",
   "author": "YourName",
-  "homepage": "[https://github.com/youruser/yourrepo](https://github.com/youruser/yourrepo)",
+  "homepage": "https://github.com/youruser/yourrepo",
   "description": "A clean, dark-themed Hyprland configuration.",
-  "source": "[https://github.com/youruser/yourrepo.git](https://github.com/youruser/yourrepo.git)",
-  "tag": "v1.0"
+  "source": "https://github.com/youruser/yourrepo.git",
+  "tag": "v1.0",
+  "restore": [
+    {
+      "title": "Keyboard Configuration",
+      "source": ".config/hypr/conf/keyboard.conf",
+      "value": true
+    },
+    {
+      "title": "Monitor Setup",
+      "source": ".config/hypr/conf/monitor.conf",
+      "value": true
+    },
+    {
+      "title": "Waypaper Wallpapers",
+      "source": ".config/waypaper",
+      "value": true
+    }
+  ]
 }
 
 ```
+
+* **title**: The label displayed in the `gum choose` menu for the user.
+* **source**: The relative path to the file or folder within the profile directory.
+* **value**: Set to `true` to have this item pre-selected in the restore menu by default.
 
 ### Required Repository Structure
 
@@ -102,11 +128,21 @@ To allow users to modify configuration files in their local test directory witho
 
 ---
 
+## 🔄 Restore & Update Logic
+
+When an update to an existing dotfiles profile is detected, the installer offers an intelligent merge system to preserve personal settings.
+
+1. **Automatic Profile Backup:** Before any changes are made, the current state of your entire profile folder (`~/.mydotfiles-test/ID`) is backed up to `~/.mydotfiles-test/backups/profile-updates/ID/<timestamp>`.
+2. **Selective Restoration:** If the `.dotinst` file defines a `restore` array, you will be prompted via an interactive menu to select which specific configurations you want to keep from your existing installation.
+3. **Intelligent Merge:** Selected items are merged into the new version from the repository before the final deployment, ensuring critical personalizations are carried forward into the update.
+
+---
+
 ## 🛡 Safety & Backups
 
 The installer uses a "Non-Destructive" symlinking approach:
 
-1. **Backup:** If a real file or folder exists where a symlink needs to go, it is moved to `~/.mydotfiles-test/backups/YYYYMMDD_HHMMSS/`.
+1. **Backup:** If a real file or folder exists where a symlink needs to go, it is moved to `~/.mydotfiles-test/backups/symlinks/YYYYMMDD_HHMMSS/`.
 2. **Relative Links:** Symlinks are created using relative paths, making the profile folder portable.
 3. **Config Isolation:** Instead of symlinking the entire `.config` folder, the script iterates through sub-folders to ensure existing app settings are not deleted.
 
