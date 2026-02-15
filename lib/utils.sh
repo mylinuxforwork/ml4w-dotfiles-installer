@@ -5,6 +5,54 @@ info() { echo -e "${GREEN}[INFO]${NC} $1" >&2; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
 error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 
+# --- Restore Orchestrator ---
+handle_restore_logic() {
+    local json=$1
+    local existing_dir=$2
+    local temp_dir=$3
+
+    # Extract formatted list for gum: Title [source/path]
+    local restore_data=$(echo "$json" | jq -r '.restore[] | "\(.title) [\(.source)]"' 2>/dev/null)
+    
+    if [ -z "$restore_data" ]; then
+        return 0
+    fi
+
+    # Pre-select everything by default
+    local selected_default=$(echo "$restore_data" | paste -sd "," -)
+    
+    info "Existing configuration found. Select items to keep (Restore):"
+    info "Uncheck items to overwrite with default versions from the update."
+    
+    local user_selections=$(echo "$restore_data" | gum choose --no-limit --selected="$selected_default")
+
+    if [ -z "$user_selections" ]; then
+        warn "No items selected for restoration. Overwriting with all defaults."
+        return 0
+    fi
+
+    # Perform the merge
+    info "Merging custom configurations..."
+    while IFS= read -r selection; do
+        # Extract the title by removing the bracketed source part
+        local title=$(echo "$selection" | sed 's/ \[.*\]$//')
+        
+        # Get the source path for this title from the JSON
+        local rel_src=$(echo "$json" | jq -r ".restore[] | select(.title==\"$title\") | .source")
+        
+        local src_path="$existing_dir/$rel_src"
+        local dest_path="$temp_dir/dotfiles/$rel_src"
+
+        if [ -e "$src_path" ]; then
+            info "  - Restoring: $title ($rel_src)"
+            mkdir -p "$(dirname "$dest_path")"
+            cp -a "$src_path" "$dest_path"
+        else
+            warn "  - Restore source not found: $rel_src"
+        fi
+    done <<< "$user_selections"
+}
+
 # --- RECURSIVE Blacklist-Aware Copy ---
 copy_with_blacklist() {
     local source=$1
@@ -24,17 +72,13 @@ copy_with_blacklist() {
         info "  - Active blacklist found with ${#blacklisted[@]} items."
     fi
 
-    # Iterate over EVERY file and directory in the source
     cd "$source" || return 1
     find . -mindepth 1 | while read -r item; do
         local rel_path="${item#./}"
         local target_path="$target/$rel_path"
         
-        # Check if this path or ANY of its parent directories are blacklisted
         local skip=false
         for b in "${blacklisted[@]}"; do
-            # Case 1: Direct match (file or folder)
-            # Case 2: The item is inside a blacklisted folder (prefix match)
             if [[ "$rel_path" == "$b" ]] || [[ "$rel_path" == "$b"/* ]]; then
                 skip=true
                 break
@@ -42,7 +86,6 @@ copy_with_blacklist() {
         done
 
         if [ "$skip" = true ] && [ -e "$target_path" ]; then
-            # Only warn for the top-level blacklisted item to avoid log spam
             if [[ "$rel_path" == "$b" ]]; then
                 warn "  - Preserving blacklisted entry: $rel_path"
             fi
