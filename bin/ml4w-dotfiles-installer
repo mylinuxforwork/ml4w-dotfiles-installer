@@ -14,6 +14,12 @@ source "$LIB_DIR/utils.sh"
 # Default Target Directory
 DOTFILES_DIR="$HOME/.mydotfiles-test"
 
+# --- Check for Installer Config Folder ---
+INSTALLER_CONFIG="$HOME/.config/ml4w-dotfiles-installer"
+if [ ! -d "$INSTALLER_CONFIG" ]; then
+    mkdir -p "$INSTALLER_CONFIG"
+fi
+
 # 3. Global Cleanup Trap
 cleanup() {
     if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
@@ -63,32 +69,34 @@ done
 check_dependencies
 
 # Step B: Read configuration and clone repo
-RESULT=$(read_dotinst "$INSTALL_URL")
+RESULT=$(read_dotinst "$INSTALL_URL" "$DOTFILES_DIR")
 CLONE_PATH=$(echo "$RESULT" | awk '{print $1}')
 PROFILE_ID=$(echo "$RESULT" | awk '{print $2}')
 
 if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
+    # Create/Get subfolder for Dotfiles ID
+    PROFILE_CONFIG="$INSTALLER_CONFIG/$PROFILE_ID"
+    mkdir -p "$PROFILE_CONFIG"
+
     info "Repository prepared. Starting package setup..."
     
     # Step C: Run dependency logic
     run_setup_logic "$CLONE_PATH"
     
-    # Step D: Move dotfiles to the final directory
+    # Step D: Deploy dotfiles with prefix-aware blacklist check
     FINAL_TARGET="$DOTFILES_DIR/$PROFILE_ID"
-    info "Deploying dotfiles to $FINAL_TARGET..."
-
-    mkdir -p "$FINAL_TARGET"
+    BLACKLIST_FILE="$PROFILE_CONFIG/blacklist"
 
     if [ -d "$CLONE_PATH/dotfiles" ]; then
-        if cp -a "$CLONE_PATH/dotfiles/." "$FINAL_TARGET/"; then
-            info "Successfully installed $PROFILE_ID dotfiles to $FINAL_TARGET."
+        if copy_with_blacklist "$CLONE_PATH/dotfiles" "$FINAL_TARGET" "$BLACKLIST_FILE"; then
+            info "Successfully updated $PROFILE_ID dotfiles."
             
             # Step E: Create symlinks from the local copy to $HOME
             deploy_symlinks "$FINAL_TARGET" "$DOTFILES_DIR"
             
             info "Installation successful!"
         else
-            error "Failed to copy dotfiles to $FINAL_TARGET."
+            error "Failed to deploy dotfiles."
             exit 1
         fi
     else

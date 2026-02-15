@@ -5,22 +5,70 @@ info() { echo -e "${GREEN}[INFO]${NC} $1" >&2; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
 error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 
-# ... (get_distro_by_bin, install_package, process_package_file, run_setup_logic remain the same) ...
+# --- RECURSIVE Blacklist-Aware Copy ---
+copy_with_blacklist() {
+    local source=$1
+    local target=$2
+    local blacklist=$3
+
+    mkdir -p "$target"
+    info "Deploying files to $target..."
+
+    local blacklisted=()
+    if [ -f "$blacklist" ]; then
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            line=$(echo "$line" | xargs)
+            [[ -z "$line" || "$line" =~ ^# ]] && continue
+            blacklisted+=("$line")
+        done < "$blacklist"
+        info "  - Active blacklist found with ${#blacklisted[@]} items."
+    fi
+
+    # Iterate over EVERY file and directory in the source
+    cd "$source" || return 1
+    find . -mindepth 1 | while read -r item; do
+        local rel_path="${item#./}"
+        local target_path="$target/$rel_path"
+        
+        # Check if this path or ANY of its parent directories are blacklisted
+        local skip=false
+        for b in "${blacklisted[@]}"; do
+            # Case 1: Direct match (file or folder)
+            # Case 2: The item is inside a blacklisted folder (prefix match)
+            if [[ "$rel_path" == "$b" ]] || [[ "$rel_path" == "$b"/* ]]; then
+                skip=true
+                break
+            fi
+        done
+
+        if [ "$skip" = true ] && [ -e "$target_path" ]; then
+            # Only warn for the top-level blacklisted item to avoid log spam
+            if [[ "$rel_path" == "$b" ]]; then
+                warn "  - Preserving blacklisted entry: $rel_path"
+            fi
+            continue
+        fi
+
+        if [ -d "$item" ]; then
+            mkdir -p "$target_path"
+        elif [ -f "$item" ]; then
+            mkdir -p "$(dirname "$target_path")"
+            cp -a "$item" "$target_path"
+        fi
+    done
+}
 
 # --- Symlink Helper ---
-# usage: create_symlink <source> <target> <backup_dir>
 create_symlink() {
     local source=$1
     local target=$2
     local backup_dir=$3
 
-    # If target already exists and is a symlink, check if it points to the right place
     if [ -L "$target" ]; then
         info "  - Symlink already exists for $(basename "$target"). Skipping."
         return 0
     fi
 
-    # If target is a real file or folder, back it up
     if [ -e "$target" ]; then
         warn "  - Existing file/folder found at $target. Creating backup..."
         mkdir -p "$backup_dir"
@@ -28,9 +76,8 @@ create_symlink() {
         rm -rf "$target"
     fi
 
-    # Create the relative symlink
     info "  - Linking $target -> $source"
-    # ln -s --relative "$source" "$target"
+    ln -s --relative "$source" "$target"
 }
 
 # --- Deployment Orchestrator ---
@@ -42,7 +89,6 @@ deploy_symlinks() {
 
     info "Starting symlink deployment..."
 
-    # 1. Process files in the profile root (excluding .config)
     for item in "$source_dir"/* "$source_dir"/.*; do
         local name=$(basename "$item")
         [[ "$name" == "." || "$name" == ".." || "$name" == ".config" ]] && continue
@@ -51,7 +97,6 @@ deploy_symlinks() {
         create_symlink "$item" "$HOME/$name" "$backup_dir"
     done
 
-    # 2. Process items inside .config
     if [ -d "$source_dir/.config" ]; then
         mkdir -p "$HOME/.config"
         for item in "$source_dir/.config"/* "$source_dir/.config"/.*; do
@@ -65,8 +110,6 @@ deploy_symlinks() {
 
     info "Symlink deployment complete. Backups (if any) are in $backup_dir"
 }
-
-# ... (get_distro_by_bin, install_package, process_package_file, run_setup_logic remain the same) ...
 
 get_distro_by_bin() {
     if command -v pacman &> /dev/null; then echo "arch";
@@ -113,7 +156,7 @@ run_setup_logic() {
     if [ -f "$preflight" ]; then info "Running preflight script for $distro..."; bash "$preflight"; fi
     [ -f "$dep_dir/packages" ] && process_package_file "$dep_dir/packages"
     local distro_pkgs="$dep_dir/packages-$distro"
-    [ -f "$distro_pkgs" ] && process_package_file "$distro_pkgs"
+    [ -f "$distro_pkgs" ] && process_package_file "$dep_dir/packages-$distro"
 }
 
 check_and_install() {
@@ -143,6 +186,7 @@ check_dependencies() {
 
 read_dotinst() {
     local url=$1
+    local target_base_dir=$2
     local content=$(curl -sL "$url")
     if [ $? -ne 0 ] || [ -z "$content" ]; then error "Failed to download configuration."; return 1; fi
     local name=$(echo "$content" | jq -r '.name // "Unknown Profile"')
@@ -154,8 +198,14 @@ read_dotinst() {
     local tag=$(echo "$content" | jq -r '.tag // empty')
     local git_url=$(echo "$content" | jq -r '.source // empty')
 
+    local install_type_text="${GREEN}New Installation${NC}"
+    if [ -d "$target_base_dir/$id" ]; then
+        install_type_text="${YELLOW}Update of existing configuration${NC}"
+    fi
+
     echo -e "${GREEN}--------------------------------------------------${NC}" >&2
     echo -e "${YELLOW}PROFILE INFORMATION${NC}" >&2
+    echo -e "Status:      $install_type_text" >&2
     echo -e "Name:        $name" >&2
     echo -e "ID:          $id" >&2
     echo -e "Version:     $version" >&2

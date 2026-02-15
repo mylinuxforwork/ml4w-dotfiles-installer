@@ -83,6 +83,25 @@ your-repo/
 
 ---
 
+## 🚫 The Blacklist Feature
+
+To allow users to modify configuration files in their local test directory without losing those changes during a repository update, the installer supports a **Blacklist**.
+
+* **Location:** `~/.config/ml4w-dotfiles-installer/<PROFILE_ID>/blacklist`
+* **Functionality:** Any file or directory listed in this file will NOT be overwritten when files are copied from the temporary clone to your target folder (`~/.mydotfiles-test/<PROFILE_ID>`).
+* **Recursive Protection:** If a folder is blacklisted, the folder and all its subfolders and files are preserved.
+
+**Example blacklist content:**
+
+```text
+.zshrc
+.config/waybar/launch.sh
+.config/nvim
+
+```
+
+---
+
 ## 🛡 Safety & Backups
 
 The installer uses a "Non-Destructive" symlinking approach:
