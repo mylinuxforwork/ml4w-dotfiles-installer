@@ -225,9 +225,11 @@ process_package_file() {
 
 run_setup_logic() {
     local repo_path=$1; local distro=$(get_distro_by_bin)
-    local dep_dir="$repo_path/setup/dependencies"
+    local setup_dir="$repo_path/setup"
+    local dep_dir="$setup_dir/dependencies"
+    if [ ! -d "$setup_dir" ]; then warn "Setup folder not found at: $dep_dir"; return 1; fi
     if [ ! -d "$dep_dir" ]; then warn "Dependency folder not found at: $dep_dir"; return 1; fi
-    local preflight="$dep_dir/preflight-$distro.sh"
+    local preflight="$setup_dir/preflight-$distro.sh"
     if [ -f "$preflight" ]; then info "Running preflight script for $distro..."; bash "$preflight"; fi
     [ -f "$dep_dir/packages" ] && process_package_file "$dep_dir/packages"
     local distro_pkgs="$dep_dir/packages-$distro"
