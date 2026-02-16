@@ -5,8 +5,19 @@ info() { echo -e "${GREEN}[INFO]${NC} $1" >&2; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
 error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 
-# --- NEW: Profile Backup ---
-# usage: backup_existing_profile <profile_dir> <id> <backup_root>
+# --- Helper to get content from URL or Local File ---
+get_json_content() {
+    local source=$1
+    if [[ "$source" =~ ^https?:// ]]; then
+        curl -sL "$source"
+    elif [ -f "$source" ]; then
+        cat "$source"
+    else
+        return 1
+    fi
+}
+
+# --- Profile Backup ---
 backup_existing_profile() {
     local profile_dir=$1
     local id=$2
@@ -17,7 +28,6 @@ backup_existing_profile() {
     info "Backing up current profile state to $backup_path..."
     mkdir -p "$(dirname "$backup_path")"
     
-    # Copy the entire ID directory to the timestamped folder
     if cp -a "$profile_dir" "$backup_path"; then
         info "  - Backup completed successfully."
     else
@@ -30,6 +40,7 @@ handle_restore_logic() {
     local json=$1
     local existing_dir=$2
     local temp_dir=$3
+    local subfolder=$4
 
     local restore_data=$(echo "$json" | jq -r '.restore[] | "\(.title) [\(.source)]"' 2>/dev/null)
     
@@ -55,7 +66,13 @@ handle_restore_logic() {
         local rel_src=$(echo "$json" | jq -r ".restore[] | select(.title==\"$title\") | .source")
         
         local src_path="$existing_dir/$rel_src"
-        local dest_path="$temp_dir/dotfiles/$rel_src"
+        
+        local dest_path
+        if [ -n "$subfolder" ] && [ "$subfolder" != "null" ]; then
+            dest_path="$temp_dir/$subfolder/$rel_src"
+        else
+            dest_path="$temp_dir/$rel_src"
+        fi
 
         if [ -e "$src_path" ]; then
             info "  - Restoring: $title ($rel_src)"
@@ -117,13 +134,19 @@ copy_with_blacklist() {
 
 # --- Symlink Helper ---
 create_symlink() {
-    local source=$1
-    local target=$2
-    local backup_dir=$3
+    local source=$1; local target=$2; local backup_dir=$3
+    
+    local abs_source=$(realpath -m "$source")
 
     if [ -L "$target" ]; then
-        info "  - Symlink already exists for $(basename "$target"). Skipping."
-        return 0
+        local current_link_target=$(realpath -m "$target")
+        if [ "$current_link_target" == "$abs_source" ]; then
+            info "  - Link already correct for $(basename "$target"). Skipping."
+            return 0
+        else
+            warn "  - Link $(basename "$target") points elsewhere. Recreating..."
+            rm "$target"
+        fi
     fi
 
     if [ -e "$target" ]; then
@@ -139,13 +162,13 @@ create_symlink() {
 
 # --- Deployment Orchestrator ---
 deploy_symlinks() {
-    local source_dir=$1
-    local backup_root=$2
+    local source_dir=$1; local backup_root=$2; local id=$3
     local timestamp=$(date +%Y%m%d_%H%M%S)
-    local backup_dir="$backup_root/backups/symlinks/$timestamp"
+    
+    # Path updated: removed /symlinks/
+    local backup_dir="$backup_root/backups/$id/$timestamp"
 
     info "Starting symlink deployment..."
-
     for item in "$source_dir"/* "$source_dir"/.*; do
         local name=$(basename "$item")
         [[ "$name" == "." || "$name" == ".." || "$name" == ".config" ]] && continue
@@ -164,8 +187,8 @@ deploy_symlinks() {
             create_symlink "$item" "$HOME/.config/$name" "$backup_dir"
         done
     fi
-
-    info "Symlink deployment complete. Backups (if any) are in $backup_dir"
+    info "Symlink deployment complete."
+    info "Backups are in $backup_dir"
 }
 
 get_distro_by_bin() {
@@ -176,8 +199,7 @@ get_distro_by_bin() {
 }
 
 install_package() {
-    local pkg=$1
-    local distro=$(get_distro_by_bin)
+    local pkg=$1; local distro=$(get_distro_by_bin)
     case "$distro" in
         arch)
             if command -v yay &> /dev/null; then yay -S --needed --noconfirm "$pkg"
@@ -189,24 +211,20 @@ install_package() {
 }
 
 process_package_file() {
-    local file=$1
-    [ ! -f "$file" ] && return 0
+    local file=$1; [ ! -f "$file" ] && return 0
     info "Processing package list: $(basename "$file")"
     while IFS= read -r pkg || [ -n "$pkg" ]; do
-        pkg=$(echo "$pkg" | sed 's/#.*//' | xargs)
-        [[ -z "$pkg" ]] && continue
-        if command -v "$pkg" &> /dev/null || pacman -Qi "$pkg" &> /dev/null 2>&1 || rpm -q "$pkg" &> /dev/null 2>&1; then
+        pkg=$(echo "$pkg" | sed 's/#.*//' | xargs); [[ -z "$pkg" ]] && continue
+        if command -v "$pkg" &> /dev/null || pacman -Qi "$pkg" &> /dev/null 2>&1 || rpm -q "$pkg" & 2>/dev/null >&1; then
             info "  - $pkg is already installed. Skipping."
         else
-            info "  - Installing $pkg..."
-            install_package "$pkg"
+            info "  - Installing $pkg..."; install_package "$pkg"
         fi
     done < "$file"
 }
 
 run_setup_logic() {
-    local repo_path=$1
-    local distro=$(get_distro_by_bin)
+    local repo_path=$1; local distro=$(get_distro_by_bin)
     local dep_dir="$repo_path/setup/dependencies"
     if [ ! -d "$dep_dir" ]; then warn "Dependency folder not found at: $dep_dir"; return 1; fi
     local preflight="$dep_dir/preflight-$distro.sh"
@@ -234,18 +252,22 @@ check_and_install() {
 
 check_dependencies() {
     info "Checking system dependencies..."
-    check_and_install "make" "make"
-    check_and_install "git" "git"
-    check_and_install "curl" "curl"
-    check_and_install "jq" "jq"
+    check_and_install "make" "make"; check_and_install "git" "git"
+    check_and_install "curl" "curl"; check_and_install "jq" "jq"
     check_and_install "gum" "gum"
 }
 
 read_dotinst() {
-    local url=$1
+    local source=$1
     local target_base_dir=$2
-    local content=$(curl -sL "$url")
-    if [ $? -ne 0 ] || [ -z "$content" ]; then error "Failed to download configuration."; return 1; fi
+    
+    local content=$(get_json_content "$source")
+    
+    if [ $? -ne 0 ] || [ -z "$content" ]; then 
+        error "Failed to read configuration from: $source"
+        return 1 
+    fi
+
     local name=$(echo "$content" | jq -r '.name // "Unknown Profile"')
     local id=$(echo "$content" | jq -r '.id // "N/A"')
     local author=$(echo "$content" | jq -r '.author // "N/A"')
@@ -253,7 +275,11 @@ read_dotinst() {
     local description=$(echo "$content" | jq -r '.description // "No description provided."')
     local version=$(echo "$content" | jq -r '.version // "N/A"')
     local tag=$(echo "$content" | jq -r '.tag // empty')
-    local git_url=$(echo "$content" | jq -r '.source // empty')
+    local git_url_raw=$(echo "$content" | jq -r '.source // empty')
+    local subfolder=$(echo "$content" | jq -r '.subfolder // empty')
+
+    local git_url="${git_url_raw/\$HOME/$HOME}"
+    git_url="${git_url/\~/$HOME}"
 
     local install_type_text="${GREEN}New Installation${NC}"
     if [ -d "$target_base_dir/$id" ]; then
@@ -269,18 +295,27 @@ read_dotinst() {
     [ -n "$tag" ] && [ "$tag" != "null" ] && echo -e "Tag:         $tag" >&2
     echo -e "Author:      $author" >&2
     echo -e "Homepage:    $homepage" >&2
+    echo -e "Source:      $git_url" >&2
+    [ -n "$subfolder" ] && [ "$subfolder" != "null" ] && echo -e "Subfolder:   $subfolder" >&2
     echo -e "Description: $description" >&2
-    echo -e "${GREEN}--------------------------------------------------${NC}" >&2
-    echo -e "Source URL:  $git_url" >&2
     echo -e "${GREEN}--------------------------------------------------${NC}" >&2
 
     if ! gum confirm "Do you want to proceed with the installation?"; then info "Installation cancelled by user."; exit 0; fi
 
     local working_dir=$(mktemp -d -t ml4w-dots-XXXXXX)
-    local clone_cmd="git clone --depth=1"
-    [ -n "$tag" ] && [ "$tag" != "null" ] && clone_cmd="git clone --depth=1 --branch $tag"
 
-    info "Cloning repository..."
-    if $clone_cmd "$git_url" "$working_dir" &> /dev/null; then printf "%s %s" "$working_dir" "$id"
-    else error "Failed to clone repository."; rm -rf "$working_dir"; return 1; fi
+    if [ -d "$git_url" ]; then
+        info "Local repository detected. Copying source..."
+        cp -a "$git_url/." "$working_dir/"
+    else
+        info "Remote repository detected. Cloning source..."
+        local clone_cmd="git clone --depth=1"
+        [ -n "$tag" ] && [ "$tag" != "null" ] && clone_cmd="git clone --depth=1 --branch $tag"
+
+        if ! $clone_cmd "$git_url" "$working_dir" &> /dev/null; then 
+            error "Failed to clone repository."; rm -rf "$working_dir"; return 1
+        fi
+    fi
+    
+    printf "%s %s %s" "$working_dir" "$id" "$subfolder"
 }

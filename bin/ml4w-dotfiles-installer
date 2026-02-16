@@ -34,9 +34,9 @@ show_help() {
     echo "Usage: ml4w-dotfiles-installer [OPTIONS]"
     echo ""
     echo "Options: "
-    echo "  --install <url>     Install dotfiles from a .dotinst URL"
-    echo "  --target <path>     Target directory (Default: $HOME/.mydotfiles-test)"
-    echo "  --help              Show this help message"
+    echo "  --install <path/url> Install dotfiles from local path or URL"
+    echo "  --target <path>      Target directory (Default: $HOME/.mydotfiles-test)"
+    echo "  --help               Show this help message"
 }
 
 # 5. Argument Parsing
@@ -49,6 +49,9 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         --install)
             INSTALL_URL="$2"
+            if [[ ! "$INSTALL_URL" =~ ^https?:// ]] && [ -f "$INSTALL_URL" ]; then
+                INSTALL_URL=$(realpath "$INSTALL_URL")
+            fi
             shift 2 ;;
         --target)
             DOTFILES_DIR="$(mkdir -p "$2" && cd "$2" && pwd)"
@@ -72,9 +75,9 @@ check_dependencies
 RESULT=$(read_dotinst "$INSTALL_URL" "$DOTFILES_DIR")
 CLONE_PATH=$(echo "$RESULT" | awk '{print $1}')
 PROFILE_ID=$(echo "$RESULT" | awk '{print $2}')
+SUBFOLDER=$(echo "$RESULT" | awk '{print $3}')
 
 if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
-    # Create/Get subfolder for Dotfiles ID
     PROFILE_CONFIG="$INSTALLER_CONFIG/$PROFILE_ID"
     mkdir -p "$PROFILE_CONFIG"
 
@@ -82,32 +85,34 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
 
     # --- Step B.5: Update-specific Logic (Backup & Restore) ---
     if [ -d "$FINAL_TARGET" ]; then
-        # 1. Backup the existing sandbox folder before any changes
         backup_existing_profile "$FINAL_TARGET" "$PROFILE_ID" "$DOTFILES_DIR"
 
-        # 2. Restore logic
-        DOTINST_JSON=$(curl -sL "$INSTALL_URL")
+        DOTINST_JSON=$(get_json_content "$INSTALL_URL")
         RESTORE_COUNT=$(echo "$DOTINST_JSON" | jq '.restore | length' 2>/dev/null)
         
         if [ "$RESTORE_COUNT" != "null" ] && [ "$RESTORE_COUNT" -gt 0 ]; then
-            handle_restore_logic "$DOTINST_JSON" "$FINAL_TARGET" "$CLONE_PATH"
+            handle_restore_logic "$DOTINST_JSON" "$FINAL_TARGET" "$CLONE_PATH" "$SUBFOLDER"
         fi
     fi
 
     info "Repository prepared. Starting package setup..."
-    
-    # Step C: Run dependency logic
     run_setup_logic "$CLONE_PATH"
     
     # Step D: Deploy dotfiles with recursive blacklist check
     BLACKLIST_FILE="$PROFILE_CONFIG/blacklist"
 
-    if [ -d "$CLONE_PATH/dotfiles" ]; then
-        if copy_with_blacklist "$CLONE_PATH/dotfiles" "$FINAL_TARGET" "$BLACKLIST_FILE"; then
+    if [ -n "$SUBFOLDER" ] && [ "$SUBFOLDER" != "null" ]; then
+        SRC_DIR="$CLONE_PATH/$SUBFOLDER"
+    else
+        SRC_DIR="$CLONE_PATH"
+    fi
+
+    if [ -d "$SRC_DIR" ]; then
+        if copy_with_blacklist "$SRC_DIR" "$FINAL_TARGET" "$BLACKLIST_FILE"; then
             info "Successfully updated $PROFILE_ID dotfiles."
             
-            # Step E: Create symlinks from the local copy to $HOME
-            deploy_symlinks "$FINAL_TARGET" "$DOTFILES_DIR"
+            # Step E: Create symlinks (ID-aware and active replacement)
+            deploy_symlinks "$FINAL_TARGET" "$DOTFILES_DIR" "$PROFILE_ID"
             
             info "Installation successful!"
         else
@@ -115,7 +120,7 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
             exit 1
         fi
     else
-        error "Source folder 'dotfiles' not found in cloned repository."
+        error "Source folder '$SRC_DIR' not found in cloned repository."
         exit 1
     fi
 else
