@@ -210,10 +210,29 @@ install_package() {
 
 process_package_file() {
     local file=$1; [ ! -f "$file" ] && return 0
+    local distro=$(get_distro_by_bin)
     info "Processing package list: $(basename "$file")"
+
     while IFS= read -r pkg || [ -n "$pkg" ]; do
         pkg=$(echo "$pkg" | sed 's/#.*//' | xargs); [[ -z "$pkg" ]] && continue
-        if command -v "$pkg" &> /dev/null || pacman -Qi "$pkg" &> /dev/null 2>&1 || rpm -q "$pkg" & 2>/dev/null >&1; then
+
+        local installed=false
+        # Distro-specific check
+        case "$distro" in
+            arch)
+                if pacman -Qi "$pkg" &> /dev/null; then installed=true; fi
+                ;;
+            fedora|opensuse)
+                if rpm -q "$pkg" &> /dev/null; then installed=true; fi
+                ;;
+        esac
+
+        # General binary fallback
+        if [ "$installed" = false ] && command -v "$pkg" &> /dev/null; then
+            installed=true
+        fi
+
+        if [ "$installed" = true ]; then
             info "  - $pkg is already installed. Skipping."
         else
             info "  - Installing $pkg..."; install_package "$pkg"
@@ -225,7 +244,7 @@ run_setup_logic() {
     local repo_path=$1; local distro=$(get_distro_by_bin)
     local dep_dir="$repo_path/setup/dependencies"
     
-    # 1. Preflight (Setup Root)
+    # 1. Preflight
     local preflight="$repo_path/setup/preflight-$distro.sh"
     if [ -f "$preflight" ]; then 
         info "Running preflight script for $distro..."
@@ -242,7 +261,7 @@ run_setup_logic() {
     local distro_pkgs="$dep_dir/packages-$distro"
     [ -f "$distro_pkgs" ] && process_package_file "$dep_dir/packages-$distro"
 
-    # 3. Post-installation (Setup Root)
+    # 3. Post-installation
     local postflight="$repo_path/setup/post-$distro.sh"
     if [ -f "$postflight" ]; then 
         info "Running post-installation script for $distro..."
