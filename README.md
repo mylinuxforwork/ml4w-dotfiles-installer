@@ -10,6 +10,7 @@ An authentic, modular, and safe way to deploy Linux configurations. This script 
 * **Proactive Symlinking:** Automatically detects if a symlink points to a different ID and replaces it.
 * **Automated Backups:** Full profile snapshots and symlink backups organized by Project ID and Timestamp.
 * **Developer Friendly:** Supports local `.dotinst` files and local repository sources for rapid testing.
+* **No-Symlink Mode:** Skip the final deployment step to test staging and package installation safely.
 
 ---
 
@@ -50,21 +51,53 @@ ml4w-dotfiles-installer --install ~/Projects/dotfiles/dev.dotinst
 
 ```
 
+### 🧪 Test Mode (No Symlinks)
+
+If you want to test the entire installation process—including package installation, pre/post scripts, and file staging—without actually modifying your `$HOME` directory, use the `--nosymlink` flag:
+
+```bash
+ml4w-dotfiles-installer --install ~/Projects/dotfiles/dev.dotinst --nosymlink
+
+```
+
 ---
 
 ## 🏗 For Content Creators: The `.dotinst` File
 
 The installer parses a JSON-formatted `.dotinst` file.
 
-### Local Source Support (for Developers)
+### 1. Remote Profile Example (Production)
 
-In the `source` field, you can specify a local directory instead of a Git URL. The script supports variable expansion for `$HOME` and `~`.
+This is the standard configuration for hosting your dotfiles on GitHub or GitLab.
+
+```json
+{
+  "name": "ML4W Hyprland Stable",
+  "id": "com.ml4w.hyprland",
+  "version": "2.10.1",
+  "author": "Stephan Raabe",
+  "homepage": "https://ml4w.com",
+  "source": "https://github.com/mylinuxforwork/dotfiles.git",
+  "subfolder": "dotfiles",
+  "restore": [
+    {
+      "title": "Hyprland Settings",
+      "source": ".config/hypr/settings.conf"
+    }
+  ]
+}
+
+```
+
+### 2. Local Profile Example (Development)
+
+Used for rapid local testing. Variable expansion for `$HOME` and `~` is supported in the `source` field.
 
 ```json
 {
   "name": "My Dev Setup",
   "id": "com.user.dev",
-  "version": "1.0.0",
+  "version": "1.0.0-dev",
   "author": "Developer Name",
   "source": "$HOME/Projects/my-dotfiles-repo",
   "subfolder": "dotfiles",
@@ -88,6 +121,9 @@ your-repo/
 │   ├── .config/            # Folders inside are symlinked to ~/.config/
 │   └── .zshrc              # Files are symlinked to $HOME/
 └── setup/
+    └── post-arch.sh        # Distro-specific post-scripts
+    └── post-fedora.sh
+    └── preflight-arch.sh   # Distro-specific pre-scripts
     └── dependencies/
         ├── packages        # Common packages
         └── packages-arch   # Distro-specific packages

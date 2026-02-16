@@ -91,7 +91,7 @@ copy_with_blacklist() {
     local blacklist=$3
 
     mkdir -p "$target"
-    info "Deploying files to $target..."
+    info "Staging files to $target..."
 
     local blacklisted=()
     if [ -f "$blacklist" ]; then
@@ -135,7 +135,6 @@ copy_with_blacklist() {
 # --- Symlink Helper ---
 create_symlink() {
     local source=$1; local target=$2; local backup_dir=$3
-    
     local abs_source=$(realpath -m "$source")
 
     if [ -L "$target" ]; then
@@ -217,7 +216,6 @@ process_package_file() {
         pkg=$(echo "$pkg" | sed 's/#.*//' | xargs); [[ -z "$pkg" ]] && continue
 
         local installed=false
-        # Distro-specific check
         case "$distro" in
             arch)
                 if pacman -Qi "$pkg" &> /dev/null; then installed=true; fi
@@ -227,7 +225,6 @@ process_package_file() {
                 ;;
         esac
 
-        # General binary fallback
         if [ "$installed" = false ] && command -v "$pkg" &> /dev/null; then
             installed=true
         fi
@@ -244,14 +241,12 @@ run_setup_logic() {
     local repo_path=$1; local distro=$(get_distro_by_bin)
     local dep_dir="$repo_path/setup/dependencies"
     
-    # 1. Preflight
     local preflight="$repo_path/setup/preflight-$distro.sh"
     if [ -f "$preflight" ]; then 
         info "Running preflight script for $distro..."
         bash "$preflight"
     fi
     
-    # 2. Dependencies
     if [ ! -d "$dep_dir" ]; then 
         warn "Dependency folder not found at: $dep_dir"
         return 1
@@ -259,9 +254,8 @@ run_setup_logic() {
     
     [ -f "$dep_dir/packages" ] && process_package_file "$dep_dir/packages"
     local distro_pkgs="$dep_dir/packages-$distro"
-    [ -f "$distro_pkgs" ] && process_package_file "$dep_dir/packages-$distro"
+    [ -f "$distro_pkgs" ] && process_package_file "$distro_pkgs"
 
-    # 3. Post-installation
     local postflight="$repo_path/setup/post-$distro.sh"
     if [ -f "$postflight" ]; then 
         info "Running post-installation script for $distro..."
@@ -293,9 +287,7 @@ check_dependencies() {
 }
 
 read_dotinst() {
-    local source=$1
-    local target_base_dir=$2
-    
+    local source=$1; local target_base_dir=$2
     local content=$(get_json_content "$source")
     
     if [ $? -ne 0 ] || [ -z "$content" ]; then 
@@ -313,13 +305,10 @@ read_dotinst() {
     local git_url_raw=$(echo "$content" | jq -r '.source // empty')
     local subfolder=$(echo "$content" | jq -r '.subfolder // empty')
 
-    local git_url="${git_url_raw/\$HOME/$HOME}"
-    git_url="${git_url/\~/$HOME}"
+    local git_url="${git_url_raw/\$HOME/$HOME}"; git_url="${git_url/\~/$HOME}"
 
     local install_type_text="${GREEN}New Installation${NC}"
-    if [ -d "$target_base_dir/$id" ]; then
-        install_type_text="${YELLOW}Update of existing configuration${NC}"
-    fi
+    [ -d "$target_base_dir/$id" ] && install_type_text="${YELLOW}Update of existing configuration${NC}"
 
     echo -e "${GREEN}--------------------------------------------------${NC}" >&2
     echo -e "${YELLOW}PROFILE INFORMATION${NC}" >&2
@@ -335,10 +324,9 @@ read_dotinst() {
     echo -e "Description: $description" >&2
     echo -e "${GREEN}--------------------------------------------------${NC}" >&2
 
-    if ! gum confirm "Do you want to proceed with the installation?"; then info "Installation cancelled by user."; exit 0; fi
+    if ! gum confirm "Do you want to proceed with the installation?"; then info "Installation cancelled."; exit 0; fi
 
     local working_dir=$(mktemp -d -t ml4w-dots-XXXXXX)
-
     if [ -d "$git_url" ]; then
         info "Local repository detected. Copying source..."
         cp -a "$git_url/." "$working_dir/"
@@ -346,11 +334,9 @@ read_dotinst() {
         info "Remote repository detected. Cloning source..."
         local clone_cmd="git clone --depth=1"
         [ -n "$tag" ] && [ "$tag" != "null" ] && clone_cmd="git clone --depth=1 --branch $tag"
-
         if ! $clone_cmd "$git_url" "$working_dir" &> /dev/null; then 
             error "Failed to clone repository."; rm -rf "$working_dir"; return 1
         fi
     fi
-    
     printf "%s %s %s" "$working_dir" "$id" "$subfolder"
 }
