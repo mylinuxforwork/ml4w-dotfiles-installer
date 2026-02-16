@@ -4,12 +4,12 @@ An authentic, modular, and safe way to deploy Linux configurations. This script 
 
 ## 🚀 Key Features
 
-* **Modular Architecture:** Logic is separated into library files (`.local/share/ml4w-dots-installer/`) for easy maintenance.
-* **Distro Agnostic:** Detects your package manager (Pacman, DNF, or Zypper) and handles dependencies accordingly.
+* **Modular Architecture:** Logic is separated into library files for easy maintenance.
+* **Distro Agnostic:** Detects your package manager (Pacman, DNF, or Zypper) automatically.
 * **Safe Sandbox:** Dotfiles are first copied to a local folder before being symlinked to `$HOME`.
-* **Automated Backups:** Existing files are backed up with a timestamp before being replaced by symlinks.
-* **AUR Helper Fallback:** On Arch, it intelligently checks for `yay`, then `paru`, then `pacman`.
-* **Interactive TUI:** Uses `gum` for confirmations and professional terminal feedback.
+* **Proactive Symlinking:** Automatically detects if a symlink points to a different ID and replaces it.
+* **Automated Backups:** Full profile snapshots and symlink backups organized by Project ID and Timestamp.
+* **Developer Friendly:** Supports local `.dotinst` files and local repository sources for rapid testing.
 
 ---
 
@@ -32,97 +32,65 @@ Make sure `~/.local/bin` is in your environment `$PATH`.
 
 ## 📖 Usage
 
-To install a dotfiles profile using a `.dotinst` URL:
+### Standard Installation (Remote)
+
+To install a dotfiles profile using a remote URL:
 
 ```bash
 ml4w-dotfiles-installer --install https://raw.githubusercontent.com/user/repo/main/profile.dotinst
 
 ```
 
-### Optional Parameters
+### Developer Installation (Local)
 
-* `--target <path>`: Overwrite the default storage location (Default: `~/.mydotfiles-test`).
-* `--help`: Show the help menu.
+To test a local configuration file during development:
+
+```bash
+ml4w-dotfiles-installer --install ~/Projects/dotfiles/dev.dotinst
+
+```
 
 ---
 
 ## 🏗 For Content Creators: The `.dotinst` File
 
-The installer parses a JSON-formatted `.dotinst` file to understand how to handle the repository.
+The installer parses a JSON-formatted `.dotinst` file.
 
-### Template with Restore Options
+### Local Source Support (for Developers)
 
-The `restore` array allows you to define specific files or folders that the user can choose to keep from their existing installation when they run an update.
+In the `source` field, you can specify a local directory instead of a Git URL. The script supports variable expansion for `$HOME` and `~`.
 
 ```json
 {
-  "name": "My Hyprland Setup",
-  "id": "hyprland-stable",
+  "name": "My Dev Setup",
+  "id": "com.user.dev",
   "version": "1.0.0",
-  "author": "YourName",
-  "homepage": "https://github.com/youruser/yourrepo",
-  "description": "A clean, dark-themed Hyprland configuration.",
-  "source": "https://github.com/youruser/yourrepo.git",
-  "tag": "v1.0",
+  "author": "Developer Name",
+  "source": "$HOME/Projects/my-dotfiles-repo",
+  "subfolder": "dotfiles",
   "restore": [
     {
-      "title": "Keyboard Configuration",
-      "source": ".config/hypr/conf/keyboard.conf",
-      "value": true
-    },
-    {
-      "title": "Monitor Setup",
-      "source": ".config/hypr/conf/monitor.conf",
-      "value": true
-    },
-    {
-      "title": "Waypaper Wallpapers",
-      "source": ".config/waypaper",
-      "value": true
+      "title": "Local Settings",
+      "source": ".config/myapp/settings.conf"
     }
   ]
 }
 
 ```
 
-* **title**: The label displayed in the `gum choose` menu for the user.
-* **source**: The relative path to the file or folder within the profile directory.
-* **value**: Set to `true` to have this item pre-selected in the restore menu by default.
-
 ### Required Repository Structure
 
-Your Git repository must follow this structure for the automated logic to work:
+Your repository (local or remote) should follow this structure:
 
 ```text
 your-repo/
-├── dotfiles/               # Contents are copied to ~/.mydotfiles-test/ID/
+├── dotfiles/               # Contents (or the defined "subfolder") are copied to ~/.mydotfiles-test/ID/
 │   ├── .config/            # Folders inside are symlinked to ~/.config/
 │   └── .zshrc              # Files are symlinked to $HOME/
 └── setup/
     └── dependencies/
-        ├── packages        # List of common packages
-        ├── packages-arch   # Arch-specific packages
-        ├── packages-fedora # Fedora-specific packages
-        └── preflight-arch.sh # Prep script (e.g., to install AUR helpers)
-
-```
-
----
-
-## 🚫 The Blacklist Feature
-
-To allow users to modify configuration files in their local test directory without losing those changes during a repository update, the installer supports a **Blacklist**.
-
-* **Location:** `~/.config/ml4w-dotfiles-installer/<PROFILE_ID>/blacklist`
-* **Functionality:** Any file or directory listed in this file will NOT be overwritten when files are copied from the temporary clone to your target folder (`~/.mydotfiles-test/<PROFILE_ID>`).
-* **Recursive Protection:** If a folder is blacklisted, the folder and all its subfolders and files are preserved.
-
-**Example blacklist content:**
-
-```text
-.zshrc
-.config/waybar/launch.sh
-.config/nvim
+        ├── packages        # Common packages
+        └── packages-arch   # Distro-specific packages
 
 ```
 
@@ -130,21 +98,18 @@ To allow users to modify configuration files in their local test directory witho
 
 ## 🔄 Restore & Update Logic
 
-When an update to an existing dotfiles profile is detected, the installer offers an intelligent merge system to preserve personal settings.
-
-1. **Automatic Profile Backup:** Before any changes are made, the current state of your entire profile folder (`~/.mydotfiles-test/ID`) is backed up to `~/.mydotfiles-test/backups/profile-updates/ID/<timestamp>`.
-2. **Selective Restoration:** If the `.dotinst` file defines a `restore` array, you will be prompted via an interactive menu to select which specific configurations you want to keep from your existing installation.
-3. **Intelligent Merge:** Selected items are merged into the new version from the repository before the final deployment, ensuring critical personalizations are carried forward into the update.
+1. **Automatic Profile Backup:** Before updates, your profile folder is backed up to `~/.mydotfiles-test/backups/profile-updates/ID/<timestamp>`.
+2. **Selective Restoration:** Interactive menu via `gum` to select which custom configurations to keep.
+3. **Intelligent Merge:** Selected items are merged into the new source before deployment.
 
 ---
 
 ## 🛡 Safety & Backups
 
-The installer uses a "Non-Destructive" symlinking approach:
+The installer uses a highly organized backup system:
 
-1. **Backup:** If a real file or folder exists where a symlink needs to go, it is moved to `~/.mydotfiles-test/backups/symlinks/YYYYMMDD_HHMMSS/`.
-2. **Relative Links:** Symlinks are created using relative paths, making the profile folder portable.
-3. **Config Isolation:** Instead of symlinking the entire `.config` folder, the script iterates through sub-folders to ensure existing app settings are not deleted.
+1. **Symlink Backups:** If a file in `$HOME` is replaced, it is moved to `~/.mydotfiles-test/backups/[PROJECT_ID]/[TIMESTAMP]`.
+2. **Active Replacement:** If the installer detects an existing symlink pointing to a *different* project ID, it proactively recreates the link to point to the currently active profile.
 
 ---
 
