@@ -164,8 +164,6 @@ create_symlink() {
 deploy_symlinks() {
     local source_dir=$1; local backup_root=$2; local id=$3
     local timestamp=$(date +%Y%m%d_%H%M%S)
-    
-    # Path updated: removed /symlinks/
     local backup_dir="$backup_root/backups/$id/$timestamp"
 
     info "Starting symlink deployment..."
@@ -225,15 +223,31 @@ process_package_file() {
 
 run_setup_logic() {
     local repo_path=$1; local distro=$(get_distro_by_bin)
-    local setup_dir="$repo_path/setup"
-    local dep_dir="$setup_dir/dependencies"
-    if [ ! -d "$setup_dir" ]; then warn "Setup folder not found at: $dep_dir"; return 1; fi
-    if [ ! -d "$dep_dir" ]; then warn "Dependency folder not found at: $dep_dir"; return 1; fi
-    local preflight="$setup_dir/preflight-$distro.sh"
-    if [ -f "$preflight" ]; then info "Running preflight script for $distro..."; bash "$preflight"; fi
+    local dep_dir="$repo_path/setup/dependencies"
+    
+    # 1. Preflight (Setup Root)
+    local preflight="$repo_path/setup/preflight-$distro.sh"
+    if [ -f "$preflight" ]; then 
+        info "Running preflight script for $distro..."
+        bash "$preflight"
+    fi
+    
+    # 2. Dependencies
+    if [ ! -d "$dep_dir" ]; then 
+        warn "Dependency folder not found at: $dep_dir"
+        return 1
+    fi
+    
     [ -f "$dep_dir/packages" ] && process_package_file "$dep_dir/packages"
     local distro_pkgs="$dep_dir/packages-$distro"
     [ -f "$distro_pkgs" ] && process_package_file "$dep_dir/packages-$distro"
+
+    # 3. Post-installation (Setup Root)
+    local postflight="$repo_path/setup/post-$distro.sh"
+    if [ -f "$postflight" ]; then 
+        info "Running post-installation script for $distro..."
+        bash "$postflight"
+    fi
 }
 
 check_and_install() {
