@@ -238,15 +238,19 @@ process_package_file() {
 }
 
 run_setup_logic() {
-    local repo_path=$1; local distro=$(get_distro_by_bin)
+    local repo_path=$1; local profile_id=$2
+    local distro=$(get_distro_by_bin)
     local dep_dir="$repo_path/setup/dependencies"
+    local user_config_dir="$HOME/.config/ml4w-dotfiles-installer/$profile_id"
     
+    # 1. Repo Preflight
     local preflight="$repo_path/setup/preflight-$distro.sh"
     if [ -f "$preflight" ]; then 
         info "Running preflight script for $distro..."
         bash "$preflight"
     fi
     
+    # 2. Dependencies
     if [ ! -d "$dep_dir" ]; then 
         warn "Dependency folder not found at: $dep_dir"
         return 1
@@ -256,10 +260,18 @@ run_setup_logic() {
     local distro_pkgs="$dep_dir/packages-$distro"
     [ -f "$distro_pkgs" ] && process_package_file "$distro_pkgs"
 
+    # 3. Repo Post-installation
     local postflight="$repo_path/setup/post-$distro.sh"
     if [ -f "$postflight" ]; then 
         info "Running post-installation script for $distro..."
         bash "$postflight"
+    fi
+
+    # 4. User-specific Post-installation
+    local user_post="$user_config_dir/post.sh"
+    if [ -f "$user_post" ]; then
+        info "Running user-specific post-installation script for $profile_id..."
+        bash "$user_post"
     fi
 }
 
@@ -312,6 +324,7 @@ read_dotinst() {
     local subfolder=$(echo "$content" | jq -r '.subfolder // empty')
 
     local git_url="${git_url_raw/\$HOME/$HOME}"; git_url="${git_url/\~/$HOME}"
+    local user_post="$HOME/.config/ml4w-dotfiles-installer/$id/post.sh"
 
     local install_type_text="${GREEN}New Installation${NC}"
     [ -d "$target_base_dir/$id" ] && install_type_text="${YELLOW}Update of existing configuration${NC}"
@@ -328,6 +341,12 @@ read_dotinst() {
     echo -e "Homepage:    $homepage" >&2
     echo -e "Source:      $git_url" >&2
     [ -n "$subfolder" ] && [ "$subfolder" != "null" ] && echo -e "Subfolder:   $subfolder" >&2
+    # Detection line for User Post Script
+    if [ -f "$user_post" ]; then
+        echo -e "User Script: ${GREEN}Detected${NC}" >&2
+    else
+        echo -e "User Script: None" >&2
+    fi
     echo -e "Description: $description" >&2
     echo -e "${GREEN}--------------------------------------------------${NC}" >&2
 
