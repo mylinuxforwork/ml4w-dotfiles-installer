@@ -62,9 +62,12 @@ while [[ $# -gt 0 ]]; do
             TEST_MODE=true
             shift ;;
         --help)
-            show_help; exit 0 ;;
+            show_help
+            exit 0 ;;
         *)
-            error "Unknown option: $1"; show_help; exit 1 ;;
+            error "Unknown option: $1"
+            show_help
+            exit 1 ;;
     esac
 done
 
@@ -96,8 +99,7 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
         DOTINST_JSON=$(get_json_content "$INSTALL_URL")
         RESTORE_COUNT=$(echo "$DOTINST_JSON" | jq '.restore | length' 2>/dev/null)
         
-        if [[ -n "$RESTORE_COUNT" && "$RESTORE_COUNT" != "null" && "$RESTORE_COUNT" -gt 0 ]]; then
-            # We call this to allow users to keep their local versions
+        if [ "$RESTORE_COUNT" != "null" ] && [ "$RESTORE_COUNT" -gt 0 ]; then
             handle_restore_logic "$DOTINST_JSON" "$FINAL_TARGET" "$CLONE_PATH" "$SUBFOLDER"
         fi
     fi
@@ -125,7 +127,7 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
         if copy_with_blacklist "$SRC_DIR" "$FINAL_TARGET" "$BLACKLIST_FILE"; then
             info "Successfully updated $PROFILE_ID dotfiles in sandbox."
             
-            # Step E: Create symlinks (Aggressive Refresh)
+            # Step E: Create symlinks
             deploy_symlinks "$FINAL_TARGET" "$DOTFILES_DIR" "$PROFILE_ID"
             
             info "Installation successful!"
