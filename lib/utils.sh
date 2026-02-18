@@ -39,21 +39,30 @@ handle_restore_logic() {
     if [ -z "$restore_data" ]; then return 0; fi
 
     local selected_default=$(echo "$restore_data" | paste -sd "," -)
-    info "Existing configuration found. Select items to keep (Restore):"
     
-    # Interaction Fix: Force gum to talk to terminal directly for UI, but capture output
+    info "Existing configuration found. Select items to keep (RESTORE):"
+    info "  [X] Selected: Keep your current local version"
+    info "  [ ] Unchecked: Overwrite with the default version from the update"
+
+    # Interaction Fix: Pipe data in, but tell gum to use TTY for interaction
+    # Do NOT redirect standard output (stdout) to TTY here, or the variable will be empty
     local user_selections=$(echo "$restore_data" | gum choose --no-limit --selected="$selected_default" < /dev/tty)
 
     if [ -z "$user_selections" ]; then
-        warn "No items selected for restoration. Overwriting with all defaults."
+        warn "No items selected for restoration. Updating with all default versions."
         return 0
     fi
 
     info "Merging custom configurations..."
     while IFS= read -r selection; do
-        local title=$(echo "$selection" | sed 's/ \[.*\]$//')
+        [[ -z "$selection" ]] && continue
+        local title=$(echo "$selection" | sed 's/ \[.*\]$//' | xargs)
         local rel_src=$(echo "$json" | jq -r ".restore[] | select(.title==\"$title\") | .source")
+        
+        # Source is our currently installed folder
         local src_path="$existing_dir/$rel_src"
+        
+        # Destination is the temporary clone (so it is preserved during final deployment)
         local dest_path
         if [ -n "$subfolder" ] && [ "$subfolder" != "null" ]; then
             dest_path="$temp_dir/$subfolder/$rel_src"
@@ -63,7 +72,8 @@ handle_restore_logic() {
 
         if [ -e "$src_path" ]; then
             info "  - Restoring: $title ($rel_src)"
-            mkdir -p "$(dirname "$dest_path")"; cp -a "$src_path" "$dest_path"
+            mkdir -p "$(dirname "$dest_path")"
+            cp -a "$src_path" "$dest_path"
         fi
     done <<< "$user_selections"
 }
@@ -97,7 +107,7 @@ create_symlink() {
     local source=$1; local target=$2; local backup_dir=$3
     local abs_source=$(realpath -m "$source")
 
-    # Force-refresh link: delete existing link/file and recreate to ensure newest sandbox version
+    # Aggressive Refresh: Always remove the existing link/file to ensure a refresh
     if [ -L "$target" ]; then
         rm "$target"
     elif [ -e "$target" ]; then
@@ -129,7 +139,7 @@ deploy_symlinks() {
             create_symlink "$item" "$HOME/.config/$name" "$backup_dir"
         done
     fi
-    info "Symlink deployment complete. Backups: $backup_dir"
+    info "Deployment complete. Backups: $backup_dir"
 }
 
 get_distro_by_bin() {
@@ -184,7 +194,7 @@ run_setup_logic() {
     [ -f "$postflight" ] && { info "Running post-installation script for $distro..."; bash "$postflight"; }
 
     local user_post="$user_config_dir/post.sh"
-    [ -f "$user_post" ] && { info "Running user-specific post-installation script..."; bash "$user_post"; }
+    [ -f "$user_post" ] && { info "Running user-specific post-installation script for $profile_id..."; bash "$user_post"; }
 }
 
 check_and_install() {
@@ -222,8 +232,12 @@ read_dotinst() {
     local id=$(echo "$content" | jq -r '.id // "N/A"')
     local author=$(echo "$content" | jq -r '.author // "N/A"')
     local homepage=$(echo "$content" | jq -r '.homepage // "N/A"')
+    local version=$(echo "$content" | jq -r '.version // "N/A"')
+    local tag=$(echo "$content" | jq -r '.tag // empty')
+    local description=$(echo "$content" | jq -r '.description // "No description provided."')
     local git_url_raw=$(echo "$content" | jq -r '.source // empty')
     local subfolder=$(echo "$content" | jq -r '.subfolder // empty')
+    
     local git_url="${git_url_raw/\$HOME/$HOME}"; git_url="${git_url/\~/$HOME}"
     local user_post="$HOME/.config/ml4w-dotfiles-installer/$id/post.sh"
 
@@ -234,20 +248,37 @@ read_dotinst() {
     echo -e "${YELLOW}PROFILE INFORMATION${NC}" >&2
     [ "$test_mode" = true ] && echo -e "Mode:        ${RED}TEST MODE (Setup only)${NC}" >&2
     echo -e "Status:      $install_type_text" >&2
-    echo -e "Name:        $name\nID:          $id" >&2
+    echo -e "Name:        $name" >&2
+    echo -e "ID:          $id" >&2
+    echo -e "Version:     $version" >&2
+    [ -n "$tag" ] && [ "$tag" != "null" ] && echo -e "Tag:         $tag" >&2
     echo -e "Author:      $author" >&2
     echo -e "Homepage:    $homepage" >&2
     echo -e "Source:      $git_url" >&2
     [ -n "$subfolder" ] && [ "$subfolder" != "null" ] && echo -e "Subfolder:   $subfolder" >&2
-    [ -f "$user_post" ] && echo -e "User Script: ${GREEN}Detected${NC}" >&2 || echo -e "User Script: None" >&2
+    
+    if [ -f "$user_post" ]; then
+        echo -e "User Script: ${GREEN}Detected${NC}" >&2
+    else
+        echo -e "User Script: None" >&2
+    fi
+    echo -e "Description: $description" >&2
     echo -e "${GREEN}--------------------------------------------------${NC}" >&2
 
-    # Interaction Fix: Force gum to talk to terminal directly
     if ! gum confirm "Do you want to proceed with the installation?" < /dev/tty > /dev/tty; then 
         info "Installation cancelled by user."; exit 0; fi
 
     local working_dir=$(mktemp -d -t ml4w-dots-XXXXXX)
-    if [ -d "$git_url" ]; then cp -a "$git_url/." "$working_dir/"
-    else git clone --depth=1 "$git_url" "$working_dir" &> /dev/null || { error "Clone failed."; return 1; }; fi
+    if [ -d "$git_url" ]; then
+        info "Local repository detected. Copying source..."
+        cp -a "$git_url/." "$working_dir/"
+    else
+        info "Remote repository detected. Cloning source..."
+        local clone_cmd="git clone --depth=1"
+        [ -n "$tag" ] && [ "$tag" != "null" ] && clone_cmd="git clone --depth=1 --branch $tag"
+        if ! $clone_cmd "$git_url" "$working_dir" &> /dev/null; then 
+            error "Failed to clone repository."; rm -rf "$working_dir"; return 1
+        fi
+    fi
     printf "%s %s %s" "$working_dir" "$id" "$subfolder"
 }
