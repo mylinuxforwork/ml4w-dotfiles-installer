@@ -318,7 +318,7 @@ read_dotinst() {
 
     echo -e "${GREEN}--------------------------------------------------${NC}" >&2
     echo -e "${YELLOW}PROFILE INFORMATION${NC}" >&2
-    [ "$test_mode" = true ] && echo -e "Mode:        ${RED}TEST MODE (No Symlinks)${NC}" >&2
+    [ "$test_mode" = true ] && echo -e "Mode:        ${RED}TEST MODE (Setup only)${NC}" >&2
     echo -e "Status:      $install_type_text" >&2
     echo -e "Name:        $name" >&2
     echo -e "ID:          $id" >&2
@@ -331,7 +331,7 @@ read_dotinst() {
     echo -e "Description: $description" >&2
     echo -e "${GREEN}--------------------------------------------------${NC}" >&2
 
-    if ! gum confirm "Do you want to proceed with the installation?"; then info "Installation cancelled."; exit 0; fi
+    if ! gum confirm "Do you want to proceed with the installation?"; then info "Installation cancelled by user."; exit 0; fi
 
     local working_dir=$(mktemp -d -t ml4w-dots-XXXXXX)
     if [ -d "$git_url" ]; then
