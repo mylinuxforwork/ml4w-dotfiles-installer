@@ -53,7 +53,8 @@ handle_restore_logic() {
     info "Existing configuration found. Select items to keep (Restore):"
     info "Uncheck items to overwrite with default versions from the update."
     
-    local user_selections=$(echo "$restore_data" | gum choose --no-limit --selected="$selected_default")
+    # FIX: Point gum to TTY for interaction during variable capture
+    local user_selections=$(echo "$restore_data" | gum choose --no-limit --selected="$selected_default" < /dev/tty > /dev/tty)
 
     if [ -z "$user_selections" ]; then
         warn "No items selected for restoration. Overwriting with all defaults."
@@ -267,7 +268,7 @@ run_setup_logic() {
         bash "$postflight"
     fi
 
-    # 4. User-specific Post-installation
+    # 4. User-specific Post-installation (Individual Overrides)
     local user_post="$user_config_dir/post.sh"
     if [ -f "$user_post" ]; then
         info "Running user-specific post-installation script for $profile_id..."
@@ -287,11 +288,14 @@ check_and_install() {
         *) error "Unsupported distro."; return 1 ;;
     esac
 
+    # FIX: Explicitly read from /dev/tty to avoid issues when running via pipe/process substitution
     echo -n -e "${YELLOW}Do you want to install $pkg now? (y/n): ${NC}" >&2
-    read -r response
+    read -r response < /dev/tty
     
     if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then 
         eval "$install_cmd"
+        # Refresh path hash to find newly installed binary
+        hash -r 2>/dev/null
     else 
         error "Required tool $pkg missing. Exiting."; exit 1
     fi
@@ -341,16 +345,20 @@ read_dotinst() {
     echo -e "Homepage:    $homepage" >&2
     echo -e "Source:      $git_url" >&2
     [ -n "$subfolder" ] && [ "$subfolder" != "null" ] && echo -e "Subfolder:   $subfolder" >&2
-    # Detection line for User Post Script
+    
     if [ -f "$user_post" ]; then
         echo -e "User Script: ${GREEN}Detected${NC}" >&2
     else
         echo -e "User Script: None" >&2
     fi
+    
     echo -e "Description: $description" >&2
     echo -e "${GREEN}--------------------------------------------------${NC}" >&2
 
-    if ! gum confirm "Do you want to proceed with the installation?"; then info "Installation cancelled by user."; exit 0; fi
+    # FIX: Point gum to TTY during variable capture
+    if ! gum confirm "Do you want to proceed with the installation?" < /dev/tty > /dev/tty; then 
+        info "Installation cancelled by user."; exit 0
+    fi
 
     local working_dir=$(mktemp -d -t ml4w-dots-XXXXXX)
     if [ -d "$git_url" ]; then
@@ -364,5 +372,6 @@ read_dotinst() {
             error "Failed to clone repository."; rm -rf "$working_dir"; return 1
         fi
     fi
+    # Only stdout for capture in the main script
     printf "%s %s %s" "$working_dir" "$id" "$subfolder"
 }
