@@ -97,8 +97,8 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
         RESTORE_COUNT=$(echo "$DOTINST_JSON" | jq '.restore | length' 2>/dev/null)
         
         if [ "$RESTORE_COUNT" != "null" ] && [ "$RESTORE_COUNT" -gt 0 ]; then
-            # FIX: Added $CLONE_PATH to ensure restore logic has the correct temp target
-            handle_restore_logic "$DOTINST_JSON" "$FINAL_TARGET" "$CLONE_PATH" "$SUBFOLDER"
+            # FIX: Force TTY redirection here to enable the menu in piped environments
+            handle_restore_logic "$DOTINST_JSON" "$FINAL_TARGET" "$CLONE_PATH" "$SUBFOLDER" < /dev/tty
         fi
     fi
 

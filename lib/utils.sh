@@ -41,7 +41,7 @@ handle_restore_logic() {
     local selected_default=$(echo "$restore_data" | paste -sd "," -)
     info "Existing configuration found. Select items to keep (Restore):"
     
-    # FIX: Point gum to TTY for interaction
+    # Interaction Fix: Force gum to talk to terminal directly
     local user_selections=$(echo "$restore_data" | gum choose --no-limit --selected="$selected_default" < /dev/tty > /dev/tty)
 
     if [ -z "$user_selections" ]; then
@@ -97,7 +97,7 @@ create_symlink() {
     local source=$1; local target=$2; local backup_dir=$3
     local abs_source=$(realpath -m "$source")
 
-    # FIX: Always refresh link if it exists to ensure it points to the newest sandbox version
+    # Force-refresh link: delete and recreate to ensure newest sandbox source
     if [ -L "$target" ]; then
         rm "$target"
     elif [ -e "$target" ]; then
