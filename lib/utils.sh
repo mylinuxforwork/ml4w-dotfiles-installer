@@ -40,6 +40,8 @@ handle_restore_logic() {
 
     local selected_default=$(echo "$restore_data" | paste -sd "," -)
     info "Existing configuration found. Select items to keep (Restore):"
+    
+    # FIX: Point gum to TTY for interaction
     local user_selections=$(echo "$restore_data" | gum choose --no-limit --selected="$selected_default" < /dev/tty > /dev/tty)
 
     if [ -z "$user_selections" ]; then
@@ -53,7 +55,11 @@ handle_restore_logic() {
         local rel_src=$(echo "$json" | jq -r ".restore[] | select(.title==\"$title\") | .source")
         local src_path="$existing_dir/$rel_src"
         local dest_path
-        [ -n "$subfolder" ] && [ "$subfolder" != "null" ] && dest_path="$temp_dir/$subfolder/$rel_src" || dest_path="$temp_dir/$rel_src"
+        if [ -n "$subfolder" ] && [ "$subfolder" != "null" ]; then
+            dest_path="$temp_dir/$subfolder/$rel_src"
+        else
+            dest_path="$temp_dir/$rel_src"
+        fi
 
         if [ -e "$src_path" ]; then
             info "  - Restoring: $title ($rel_src)"
@@ -91,15 +97,16 @@ create_symlink() {
     local source=$1; local target=$2; local backup_dir=$3
     local abs_source=$(realpath -m "$source")
 
+    # FIX: Always refresh link if it exists to ensure it points to the newest sandbox version
     if [ -L "$target" ]; then
-        local current_link_target=$(realpath -m "$target")
-        if [ "$current_link_target" == "$abs_source" ]; then return 0; else rm "$target"; fi
-    fi
-
-    if [ -e "$target" ]; then
+        rm "$target"
+    elif [ -e "$target" ]; then
+        warn "  - Existing file/folder found at $target. Creating backup..."
         mkdir -p "$backup_dir"; cp -a "$target" "$backup_dir/"; rm -rf "$target"
     fi
-    info "  - Linking $target -> $source"; ln -s --relative "$source" "$target"
+
+    info "  - Linking $target -> $source"
+    ln -s --relative "$source" "$target"
 }
 
 # --- Deployment Orchestrator ---
@@ -213,10 +220,10 @@ read_dotinst() {
 
     local name=$(echo "$content" | jq -r '.name // "Unknown Profile"')
     local id=$(echo "$content" | jq -r '.id // "N/A"')
-    local git_url_raw=$(echo "$content" | jq -r '.source // empty')
-    local subfolder=$(echo "$content" | jq -r '.subfolder // empty')
     local author=$(echo "$content" | jq -r '.author // "N/A"')
     local homepage=$(echo "$content" | jq -r '.homepage // "N/A"')
+    local git_url_raw=$(echo "$content" | jq -r '.source // empty')
+    local subfolder=$(echo "$content" | jq -r '.subfolder // empty')
     local git_url="${git_url_raw/\$HOME/$HOME}"; git_url="${git_url/\~/$HOME}"
     local user_post="$HOME/.config/ml4w-dotfiles-installer/$id/post.sh"
 

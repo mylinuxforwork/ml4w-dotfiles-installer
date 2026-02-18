@@ -12,7 +12,7 @@ source "$LIB_DIR/colors.sh"
 source "$LIB_DIR/utils.sh"
 
 # Default settings
-DOTFILES_DIR="$HOME/.mydotfiles"
+DOTFILES_DIR="$HOME/.mydotfiles-test"
 TEST_MODE=false
 
 # --- Check for Installer Config Folder ---
@@ -62,12 +62,9 @@ while [[ $# -gt 0 ]]; do
             TEST_MODE=true
             shift ;;
         --help)
-            show_help
-            exit 0 ;;
+            show_help; exit 0 ;;
         *)
-            error "Unknown option: $1"
-            show_help
-            exit 1 ;;
+            error "Unknown option: $1"; show_help; exit 1 ;;
     esac
 done
 
@@ -93,7 +90,6 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
     FINAL_TARGET="$DOTFILES_DIR/$PROFILE_ID"
 
     # --- Step B.5: Update-specific Logic (Backup & Restore) ---
-    # We skip these in testmode to avoid touching existing sandbox folders
     if [ -d "$FINAL_TARGET" ] && [ "$TEST_MODE" = false ]; then
         backup_existing_profile "$FINAL_TARGET" "$PROFILE_ID" "$DOTFILES_DIR"
 
@@ -101,6 +97,7 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
         RESTORE_COUNT=$(echo "$DOTINST_JSON" | jq '.restore | length' 2>/dev/null)
         
         if [ "$RESTORE_COUNT" != "null" ] && [ "$RESTORE_COUNT" -gt 0 ]; then
+            # FIX: Added $CLONE_PATH to ensure restore logic has the correct temp target
             handle_restore_logic "$DOTINST_JSON" "$FINAL_TARGET" "$CLONE_PATH" "$SUBFOLDER"
         fi
     fi
