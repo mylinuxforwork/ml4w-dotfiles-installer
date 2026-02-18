@@ -41,8 +41,8 @@ handle_restore_logic() {
     local selected_default=$(echo "$restore_data" | paste -sd "," -)
     info "Existing configuration found. Select items to keep (Restore):"
     
-    # Interaction Fix: Force gum to talk to terminal directly
-    local user_selections=$(echo "$restore_data" | gum choose --no-limit --selected="$selected_default" < /dev/tty > /dev/tty)
+    # Interaction Fix: Force gum to talk to terminal directly for UI, but capture output
+    local user_selections=$(echo "$restore_data" | gum choose --no-limit --selected="$selected_default" < /dev/tty)
 
     if [ -z "$user_selections" ]; then
         warn "No items selected for restoration. Overwriting with all defaults."
@@ -97,7 +97,7 @@ create_symlink() {
     local source=$1; local target=$2; local backup_dir=$3
     local abs_source=$(realpath -m "$source")
 
-    # Force-refresh link: delete and recreate to ensure newest sandbox source
+    # Force-refresh link: delete existing link/file and recreate to ensure newest sandbox version
     if [ -L "$target" ]; then
         rm "$target"
     elif [ -e "$target" ]; then
@@ -242,6 +242,7 @@ read_dotinst() {
     [ -f "$user_post" ] && echo -e "User Script: ${GREEN}Detected${NC}" >&2 || echo -e "User Script: None" >&2
     echo -e "${GREEN}--------------------------------------------------${NC}" >&2
 
+    # Interaction Fix: Force gum to talk to terminal directly
     if ! gum confirm "Do you want to proceed with the installation?" < /dev/tty > /dev/tty; then 
         info "Installation cancelled by user."; exit 0; fi
 
