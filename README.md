@@ -4,7 +4,6 @@ An authentic, modular, and safe way to deploy Linux configurations. This script 
 
 ## 🚀 Key Features
 
-* **Modular Architecture:** Logic is separated into library files for easy maintenance.
 * **Distro Agnostic:** Detects your package manager (Pacman, DNF, or Zypper) automatically.
 * **Safe Sandbox:** Dotfiles are first copied to a local folder before being symlinked to `$HOME`.
 * **Proactive Symlinking:** Automatically detects if a symlink points to a different ID and replaces it.
