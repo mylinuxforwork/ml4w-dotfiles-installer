@@ -10,7 +10,8 @@ An authentic, modular, and safe way to deploy Linux configurations. This script 
 * **Proactive Symlinking:** Automatically detects if a symlink points to a different ID and replaces it.
 * **Automated Backups:** Full profile snapshots and symlink backups organized by Project ID and Timestamp.
 * **Developer Friendly:** Supports local `.dotinst` files and local repository sources for rapid testing.
-* **No-Symlink Mode:** Skip the final deployment step to test staging and package installation safely.
+* **Test Mode:** Verify package installation and setup logic without touching your files.
+* **User Overrides:** Support for individual user `post.sh` scripts per profile.
 
 ---
 
@@ -51,12 +52,12 @@ ml4w-dotfiles-installer --install ~/Projects/dotfiles/dev.dotinst
 
 ```
 
-### 🧪 Test Mode (No Symlinks)
+### 🧪 Test Mode (Setup Only)
 
-If you want to test the entire installation process—including package installation, pre/post scripts, and file staging—without actually modifying your `$HOME` directory, use the `--nosymlink` flag:
+Run the entire installation process—including package installation and pre/post scripts—without staging files or creating symlinks in your home directory. This is ideal for testing dependency logic on new distros:
 
 ```bash
-ml4w-dotfiles-installer --install ~/Projects/dotfiles/dev.dotinst --nosymlink
+ml4w-dotfiles-installer --install ~/Projects/dotfiles/dev.dotinst --testmode
 
 ```
 
@@ -64,11 +65,7 @@ ml4w-dotfiles-installer --install ~/Projects/dotfiles/dev.dotinst --nosymlink
 
 ## 🏗 For Content Creators: The `.dotinst` File
 
-The installer parses a JSON-formatted `.dotinst` file.
-
-### 1. Remote Profile Example (Production)
-
-This is the standard configuration for hosting your dotfiles on GitHub or GitLab.
+### Remote Profile Example (Production)
 
 ```json
 {
@@ -89,46 +86,39 @@ This is the standard configuration for hosting your dotfiles on GitHub or GitLab
 
 ```
 
-### 2. Local Profile Example (Development)
+---
 
-Used for rapid local testing. Variable expansion for `$HOME` and `~` is supported in the `source` field.
+## 🛠 Advanced Customization
 
-```json
-{
-  "name": "My Dev Setup",
-  "id": "com.user.dev",
-  "version": "1.0.0-dev",
-  "author": "Developer Name",
-  "source": "$HOME/Projects/my-dotfiles-repo",
-  "subfolder": "dotfiles",
-  "restore": [
-    {
-      "title": "Local Settings",
-      "source": ".config/myapp/settings.conf"
-    }
-  ]
-}
+### 1. Personal Overrides (User post.sh)
 
-```
+Users can define their own personal post-installation steps that run after the repository's standard scripts. This allows for system-specific tweaks (like enabling local services or setting hardware-specific drivers) without modifying the original dotfiles.
 
-### Required Repository Structure
+**To add an override:**
 
-Your repository (local or remote) should follow this structure:
+1. Create the profile config folder: `mkdir -p ~/.config/ml4w-dotfiles-installer/[PROFILE_ID]`
+2. Create your script: `nano ~/.config/ml4w-dotfiles-installer/[PROFILE_ID]/post.sh`
+3. Make it executable: `chmod +x ~/.config/ml4w-dotfiles-installer/[PROFILE_ID]/post.sh`
+
+The installer will detect this script and run it at the very end of the setup logic.
+
+### 2. Blacklist (File Preservation)
+
+The blacklist allows you to prevent specific files in a profile from being overwritten during an update. This is useful for configuration files you want to manage manually or keep strictly local.
+
+**Example:**
+To prevent the installer from overwriting your local monitor setup or a specific theme file, add them to `~/.config/ml4w-dotfiles-installer/[PROFILE_ID]/blacklist`:
 
 ```text
-your-repo/
-├── dotfiles/               # Contents (or the defined "subfolder") are copied to ~/.mydotfiles-test/ID/
-│   ├── .config/            # Folders inside are symlinked to ~/.config/
-│   └── .zshrc              # Files are symlinked to $HOME/
-└── setup/
-    └── post-arch.sh        # Distro-specific post-scripts
-    └── post-fedora.sh
-    └── preflight-arch.sh   # Distro-specific pre-scripts
-    └── dependencies/
-        ├── packages        # Common packages
-        └── packages-arch   # Distro-specific packages
+# Blacklist Example
+.config/hypr/conf/monitors.conf
+.config/waybar/style.css
+# You can also blacklist entire directories
+.config/my-private-app/
 
 ```
+
+Files listed here will be skipped during the staging process, preserving your local versions.
 
 ---
 

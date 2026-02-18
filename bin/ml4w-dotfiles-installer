@@ -93,7 +93,6 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
     FINAL_TARGET="$DOTFILES_DIR/$PROFILE_ID"
 
     # --- Step B.5: Update-specific Logic (Backup & Restore) ---
-    # We skip backup/restore in test mode as we aren't touching the target
     if [ -d "$FINAL_TARGET" ] && [ "$TEST_MODE" = false ]; then
         backup_existing_profile "$FINAL_TARGET" "$PROFILE_ID" "$DOTFILES_DIR"
 
@@ -106,7 +105,7 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
     fi
 
     info "Repository prepared. Starting package setup..."
-    run_setup_logic "$CLONE_PATH"
+    run_setup_logic "$CLONE_PATH" "$PROFILE_ID"
     
     # --- Step C: Test Mode Exit ---
     if [ "$TEST_MODE" = true ]; then
@@ -128,7 +127,7 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
         if copy_with_blacklist "$SRC_DIR" "$FINAL_TARGET" "$BLACKLIST_FILE"; then
             info "Successfully updated $PROFILE_ID dotfiles in sandbox."
             
-            # Step E: Create symlinks (ID-aware and active replacement)
+            # Step E: Create symlinks
             deploy_symlinks "$FINAL_TARGET" "$DOTFILES_DIR" "$PROFILE_ID"
             
             info "Installation successful!"
