@@ -12,7 +12,7 @@ source "$LIB_DIR/colors.sh"
 source "$LIB_DIR/utils.sh"
 
 # Default settings
-DOTFILES_DIR="$HOME/.mydotfiles-test"
+DOTFILES_DIR="$HOME/.mydotfiles"
 TEST_MODE=false
 
 # --- Check for Installer Config Folder ---
