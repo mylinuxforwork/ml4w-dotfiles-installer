@@ -77,6 +77,7 @@ done
 check_dependencies
 
 # Step B: Read configuration and prepare environment
+# Redirection inside read_dotinst handles the interaction fix
 RESULT=$(read_dotinst "$INSTALL_URL" "$DOTFILES_DIR" "$TEST_MODE")
 
 # Catch cases where the subshell exited early or cancelled
@@ -93,6 +94,7 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
     FINAL_TARGET="$DOTFILES_DIR/$PROFILE_ID"
 
     # --- Step B.5: Update-specific Logic (Backup & Restore) ---
+    # Skip these in testmode to avoid touching existing sandbox files
     if [ -d "$FINAL_TARGET" ] && [ "$TEST_MODE" = false ]; then
         backup_existing_profile "$FINAL_TARGET" "$PROFILE_ID" "$DOTFILES_DIR"
 
@@ -127,7 +129,7 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
         if copy_with_blacklist "$SRC_DIR" "$FINAL_TARGET" "$BLACKLIST_FILE"; then
             info "Successfully updated $PROFILE_ID dotfiles in sandbox."
             
-            # Step E: Create symlinks
+            # Step E: Create symlinks (ID-aware replacement)
             deploy_symlinks "$FINAL_TARGET" "$DOTFILES_DIR" "$PROFILE_ID"
             
             info "Installation successful!"
