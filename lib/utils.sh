@@ -266,6 +266,7 @@ run_setup_logic() {
 check_and_install() {
     local cmd=$1; local pkg=$2; local distro=$(get_distro_by_bin)
     if command -v "$cmd" &> /dev/null; then return 0; fi
+    
     warn "✗ $cmd is not installed."
     case "$distro" in
         arch) install_cmd="sudo pacman -S --needed --noconfirm $pkg" ;;
@@ -273,10 +274,15 @@ check_and_install() {
         opensuse) install_cmd="sudo zypper install -y $pkg" ;;
         *) error "Unsupported distro."; return 1 ;;
     esac
+
     echo -n -e "${YELLOW}Do you want to install $pkg now? (y/n): ${NC}" >&2
     read -r response
-    if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then eval "$install_cmd"
-    else error "Required tool $pkg missing. Exiting."; exit 1; fi
+    
+    if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then 
+        eval "$install_cmd"
+    else 
+        error "Required tool $pkg missing. Exiting."; exit 1
+    fi
 }
 
 check_dependencies() {
@@ -287,7 +293,7 @@ check_dependencies() {
 }
 
 read_dotinst() {
-    local source=$1; local target_base_dir=$2
+    local source=$1; local target_base_dir=$2; local test_mode=$3
     local content=$(get_json_content "$source")
     
     if [ $? -ne 0 ] || [ -z "$content" ]; then 
@@ -312,6 +318,7 @@ read_dotinst() {
 
     echo -e "${GREEN}--------------------------------------------------${NC}" >&2
     echo -e "${YELLOW}PROFILE INFORMATION${NC}" >&2
+    [ "$test_mode" = true ] && echo -e "Mode:        ${RED}TEST MODE (No Symlinks)${NC}" >&2
     echo -e "Status:      $install_type_text" >&2
     echo -e "Name:        $name" >&2
     echo -e "ID:          $id" >&2

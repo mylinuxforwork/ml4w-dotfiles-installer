@@ -11,13 +11,15 @@ fi
 source "$LIB_DIR/colors.sh"
 source "$LIB_DIR/utils.sh"
 
-# Defaults
+# Default settings
 DOTFILES_DIR="$HOME/.mydotfiles-test"
 SKIP_SYMLINK=false
 
-# --- Config Setup ---
+# --- Check for Installer Config Folder ---
 INSTALLER_CONFIG="$HOME/.config/ml4w-dotfiles-installer"
-[ ! -d "$INSTALLER_CONFIG" ] && mkdir -p "$INSTALLER_CONFIG"
+if [ ! -d "$INSTALLER_CONFIG" ]; then
+    mkdir -p "$INSTALLER_CONFIG"
+fi
 
 # 3. Global Cleanup Trap
 cleanup() {
@@ -35,12 +37,15 @@ show_help() {
     echo "Options: "
     echo "  --install <path/url> Install dotfiles from local path or URL"
     echo "  --target <path>      Target directory (Default: $HOME/.mydotfiles-test)"
-    echo "  --nosymlink          Skip symlink deployment (test mode)"
+    echo "  --nosymlink          Skip symlink deployment (useful for testing)"
     echo "  --help               Show this help message"
 }
 
 # 5. Argument Parsing
-if [ $# -eq 0 ]; then show_help; exit 0; fi
+if [ $# -eq 0 ]; then
+    show_help
+    exit 0
+fi
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -56,17 +61,28 @@ while [[ $# -gt 0 ]]; do
         --nosymlink)
             SKIP_SYMLINK=true
             shift ;;
-        --help) show_help; exit 0 ;;
-        *) error "Unknown option: $1"; show_help; exit 1 ;;
+        --help)
+            show_help
+            exit 0 ;;
+        *)
+            error "Unknown option: $1"
+            show_help
+            exit 1 ;;
     esac
 done
 
+# 6. Execute Logic
 [ -z "$INSTALL_URL" ] && { show_help; exit 0; }
 
 check_dependencies
 
 # Step B: Read configuration and prepare environment
-RESULT=$(read_dotinst "$INSTALL_URL" "$DOTFILES_DIR")
+# We pass $SKIP_SYMLINK so read_dotinst can show the "Test Mode" status
+RESULT=$(read_dotinst "$INSTALL_URL" "$DOTFILES_DIR" "$SKIP_SYMLINK")
+
+# Catch cases where the subshell exited early or cancelled
+[ -z "$RESULT" ] && exit 0
+
 CLONE_PATH=$(echo "$RESULT" | awk '{print $1}')
 PROFILE_ID=$(echo "$RESULT" | awk '{print $2}')
 SUBFOLDER=$(echo "$RESULT" | awk '{print $3}')
@@ -74,43 +90,54 @@ SUBFOLDER=$(echo "$RESULT" | awk '{print $3}')
 if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
     PROFILE_CONFIG="$INSTALLER_CONFIG/$PROFILE_ID"
     mkdir -p "$PROFILE_CONFIG"
+
     FINAL_TARGET="$DOTFILES_DIR/$PROFILE_ID"
 
-    # Step B.5: Backup & Restore for updates
+    # --- Step B.5: Update-specific Logic (Backup & Restore) ---
     if [ -d "$FINAL_TARGET" ]; then
         backup_existing_profile "$FINAL_TARGET" "$PROFILE_ID" "$DOTFILES_DIR"
+
         DOTINST_JSON=$(get_json_content "$INSTALL_URL")
         RESTORE_COUNT=$(echo "$DOTINST_JSON" | jq '.restore | length' 2>/dev/null)
+        
         if [ "$RESTORE_COUNT" != "null" ] && [ "$RESTORE_COUNT" -gt 0 ]; then
             handle_restore_logic "$DOTINST_JSON" "$FINAL_TARGET" "$CLONE_PATH" "$SUBFOLDER"
         fi
     fi
 
-    info "Starting package setup..."
+    info "Repository prepared. Starting package setup..."
     run_setup_logic "$CLONE_PATH"
     
     # Step D: Deploy staged dotfiles
     BLACKLIST_FILE="$PROFILE_CONFIG/blacklist"
-    SRC_DIR="$CLONE_PATH"
-    [ -n "$SUBFOLDER" ] && [ "$SUBFOLDER" != "null" ] && SRC_DIR="$CLONE_PATH/$SUBFOLDER"
+
+    if [ -n "$SUBFOLDER" ] && [ "$SUBFOLDER" != "null" ]; then
+        SRC_DIR="$CLONE_PATH/$SUBFOLDER"
+    else
+        SRC_DIR="$CLONE_PATH"
+    fi
 
     if [ -d "$SRC_DIR" ]; then
         if copy_with_blacklist "$SRC_DIR" "$FINAL_TARGET" "$BLACKLIST_FILE"; then
-            info "Successfully updated $PROFILE_ID staged files."
+            info "Successfully updated $PROFILE_ID dotfiles in sandbox."
             
-            # Step E: Deploy symlinks (if not skipped)
+            # Step E: Conditional Symlink Deployment
             if [ "$SKIP_SYMLINK" = true ]; then
-                warn "Flag --nosymlink active. Skipping symlink creation."
+                warn "Flag --nosymlink detected. Skipping symlink deployment."
             else
                 deploy_symlinks "$FINAL_TARGET" "$DOTFILES_DIR" "$PROFILE_ID"
             fi
+            
             info "Installation successful!"
         else
-            error "Failed to stage dotfiles."; exit 1
+            error "Failed to deploy dotfiles."
+            exit 1
         fi
     else
-        error "Source directory '$SRC_DIR' not found."; exit 1
+        error "Source folder '$SRC_DIR' not found in cloned repository."
+        exit 1
     fi
 else
-    error "Environment initialization failed."; exit 1
+    error "Installation failed: Repository environment could not be initialized."
+    exit 1
 fi
