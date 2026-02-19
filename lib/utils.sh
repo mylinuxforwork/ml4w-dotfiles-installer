@@ -1,22 +1,5 @@
 #!/usr/bin/env bash
 
-# --- UI Functions (Redirected to stderr) ---
-info() { echo -e "${GREEN}[INFO]${NC} $1" >&2; }
-warn() { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
-error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
-
-# --- Helper to get content from URL or Local File ---
-get_json_content() {
-    local source=$1
-    if [[ "$source" =~ ^https?:// ]]; then
-        curl -sL "$source"
-    elif [ -f "$source" ]; then
-        cat "$source"
-    else
-        return 1
-    fi
-}
-
 # --- Profile Backup ---
 backup_existing_profile() {
     local profile_dir=$1
@@ -188,25 +171,7 @@ deploy_symlinks() {
     info "Backups are in $backup_dir"
 }
 
-get_distro_by_bin() {
-    if command -v pacman &> /dev/null; then echo "arch";
-    elif command -v dnf &> /dev/null; then echo "fedora";
-    elif command -v zypper &> /dev/null; then echo "opensuse";
-    else echo "unknown"; fi
-}
-
-install_package() {
-    local pkg=$1; local distro=$(get_distro_by_bin)
-    case "$distro" in
-        arch)
-            if command -v yay &> /dev/null; then yay -S --needed --noconfirm "$pkg"
-            elif command -v paru &> /dev/null; then paru -S --needed --noconfirm "$pkg"
-            else sudo pacman -S --needed --noconfirm "$pkg"; fi ;;
-        fedora) sudo dnf install -y "$pkg" ;;
-        opensuse) sudo zypper install -y "$pkg" ;;
-    esac
-}
-
+# --- Process package list and install packages ---
 process_package_file() {
     local file=$1; [ ! -f "$file" ] && return 0
     local distro=$(get_distro_by_bin)
@@ -237,6 +202,7 @@ process_package_file() {
     done < "$file"
 }
 
+# --- Run setup logic with preflight, dependencies, post-installation and user post script ---
 run_setup_logic() {
     local repo_path=$1; local profile_id=$2
     local distro=$(get_distro_by_bin)
@@ -275,35 +241,17 @@ run_setup_logic() {
     fi
 }
 
-check_and_install() {
-    local cmd=$1; local pkg=$2; local distro=$(get_distro_by_bin)
-    if command -v "$cmd" &> /dev/null; then return 0; fi
-    
-    warn "✗ $cmd is not installed."
-    case "$distro" in
-        arch) install_cmd="sudo pacman -S --needed --noconfirm $pkg" ;;
-        fedora) install_cmd="sudo dnf install -y $pkg" ;;
-        opensuse) install_cmd="sudo zypper install -y $pkg" ;;
-        *) error "Unsupported distro."; return 1 ;;
-    esac
-
-    echo -n -e "${YELLOW}Do you want to install $pkg now? (y/n): ${NC}" >&2
-    read -r response
-    
-    if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then 
-        eval "$install_cmd"
-    else 
-        error "Required tool $pkg missing. Exiting."; exit 1
-    fi
-}
-
+# --- Check dotfiles installer dependencies ---
 check_dependencies() {
     info "Checking system dependencies..."
-    check_and_install "make" "make"; check_and_install "git" "git"
-    check_and_install "curl" "curl"; check_and_install "jq" "jq"
+    check_and_install "make" "make"
+    check_and_install "git" "git"
+    check_and_install "curl" "curl"
+    check_and_install "jq" "jq"
     check_and_install "gum" "gum"
 }
 
+# --- Read remote or local dotinst file and show installation profile ---
 read_dotinst() {
     local source=$1; local target_base_dir=$2; local test_mode=$3
     local content=$(get_json_content "$source")

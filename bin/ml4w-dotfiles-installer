@@ -9,6 +9,7 @@ fi
 
 # 2. Source Modules
 source "$LIB_DIR/colors.sh"
+source "$LIB_DIR/helpers.sh"
 source "$LIB_DIR/utils.sh"
 
 # Default settings
@@ -130,7 +131,7 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
             # Step E: Create symlinks
             deploy_symlinks "$FINAL_TARGET" "$DOTFILES_DIR" "$PROFILE_ID"
             
-            info "Installation successful!"
+            info "Installation successful! Please reboot your system."
         else
             error "Failed to deploy dotfiles."
             exit 1
