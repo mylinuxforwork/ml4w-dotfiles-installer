@@ -130,7 +130,9 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
             
             # Step E: Create symlinks
             deploy_symlinks "$FINAL_TARGET" "$DOTFILES_DIR" "$PROFILE_ID"
-            
+
+            # Step F: Set active profile
+            set_active_profile "$PROFILE_ID"
             info "Installation successful! Please reboot your system."
         else
             error "Failed to deploy dotfiles."

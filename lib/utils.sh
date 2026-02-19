@@ -251,6 +251,17 @@ check_dependencies() {
     check_and_install "gum" "gum"
 }
 
+# --- Active Profile Tracker ---
+set_active_profile() {
+    local id=$1
+    local active_file="$INSTALLER_CONFIG/active.json"
+
+    # Write the JSON object to the file
+    echo "{\"active\":\"$id\"}" > "$active_file"
+    
+    info "Profile '$id' marked as active in $active_file"
+}
+
 # --- Read remote or local dotinst file and show installation profile ---
 read_dotinst() {
     local source=$1; local target_base_dir=$2; local test_mode=$3
