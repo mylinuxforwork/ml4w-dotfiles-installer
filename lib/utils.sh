@@ -287,7 +287,7 @@ read_dotinst() {
 
     local install_type_text="${GREEN}New Installation${NC}"
     [ -d "$target_base_dir/$id" ] && install_type_text="${YELLOW}Update of existing configuration${NC}"
-
+    echo
     echo -e "${GREEN}--------------------------------------------------${NC}" >&2
     echo -e "${YELLOW}PROFILE INFORMATION${NC}" >&2
     [ "$test_mode" = true ] && echo -e "Mode:        ${RED}TEST MODE (Setup only)${NC}" >&2

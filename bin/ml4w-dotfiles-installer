@@ -15,6 +15,7 @@ source "$LIB_DIR/utils.sh"
 # Default settings
 DOTFILES_DIR="$HOME/.mydotfiles"
 TEST_MODE=false
+SCRIPT_VERSION="0.2.1"
 
 # --- Check for Installer Config Folder ---
 INSTALLER_CONFIG="$HOME/.config/ml4w-dotfiles-installer"
@@ -33,6 +34,12 @@ trap cleanup EXIT
 
 # 4. Help Function
 show_help() {
+    echo
+    echo "------------------------"
+    echo "ML4W Dotfiles Installer"
+    echo "Version: $SCRIPT_VERSION"
+    echo "------------------------"
+    echo
     echo "Usage: ml4w-dotfiles-installer [OPTIONS]"
     echo ""
     echo "Options: "
@@ -72,9 +79,13 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+echo
+info "Running ML4W Dotfiles Installer ($SCRIPT_VERSION)..."
+
 # 6. Execute Logic
 [ -z "$INSTALL_URL" ] && { show_help; exit 0; }
 
+# Step A: Check dependencies for running the script
 check_dependencies
 
 # Step B: Read configuration and prepare environment
