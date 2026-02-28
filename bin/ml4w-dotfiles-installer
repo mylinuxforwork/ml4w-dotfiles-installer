@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
-# 1. Determine the Library Path
-if [ -d "$(dirname "$0")/../lib" ]; then
-    LIB_DIR="$(cd "$(dirname "$0")/../lib" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+POTENTIAL_LIB="$SCRIPT_DIR/../lib"
+if [ -d "$POTENTIAL_LIB" ]; then
+    LIB_DIR="$(cd "$POTENTIAL_LIB" && pwd)"
+    echo ":: Running with $LIB_DIR"
 else
     LIB_DIR="$HOME/.local/share/ml4w-dotfiles-installer"
 fi
