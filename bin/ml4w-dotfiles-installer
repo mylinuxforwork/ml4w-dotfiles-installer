@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-POTENTIAL_LIB="$SCRIPT_DIR/../lib"
-if [ -d "$POTENTIAL_LIB" ]; then
-    LIB_DIR="$(cd "$POTENTIAL_LIB" && pwd)"
-    echo ":: Running with $LIB_DIR"
-else
-    LIB_DIR="$HOME/.local/share/ml4w-dotfiles-installer"
-fi
+LIB_DIR="$HOME/.local/share/ml4w-dotfiles-installer"
+# DEV
+# LIB_DIR="$HOME/Projects/ml4w-dotfiles-installer/lib"
 
 # 2. Source Modules
 source "$LIB_DIR/colors.sh"
