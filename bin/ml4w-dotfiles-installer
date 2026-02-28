@@ -12,7 +12,7 @@ source "$LIB_DIR/utils.sh"
 # Default settings
 DOTFILES_DIR="$HOME/.mydotfiles"
 TEST_MODE=false
-SCRIPT_VERSION="0.2.1"
+SCRIPT_VERSION="0.2.2"
 
 # --- Check for Installer Config Folder ---
 INSTALLER_CONFIG="$HOME/.config/ml4w-dotfiles-installer"
