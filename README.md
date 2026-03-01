@@ -19,13 +19,16 @@ An authentic, modular, and safe way to deploy Linux configurations. This script 
 To install the installer script to your local system:
 
 1. **Clone the repository.**
+```bash
+git clone https://github.com/mylinuxforwork/ml4w-dotfiles-installer
+
+```
 2. **Run the installation:**
 ```bash
+cd ml4w-dotfiles-installer
 make install
 
 ```
-
-
 3. **Ensure your PATH includes local bins:**
 Make sure `~/.local/bin` is in your environment `$PATH`.
 
