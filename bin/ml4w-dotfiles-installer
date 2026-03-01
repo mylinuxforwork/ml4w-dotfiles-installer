@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 
-LIB_DIR="$HOME/.local/share/ml4w-dotfiles-installer"
-# DEV
-# LIB_DIR="$HOME/Projects/ml4w-dotfiles-installer/lib"
+# 1. Detect script folder
+DEV_DIR="/ml4w-dotfiles-installer/bin"
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+if [[ "$SCRIPT_DIR" == *"$DEV_DIR"* ]]; then
+    LIB_DIR="$HOME/Projects/ml4w-dotfiles-installer/lib"
+    echo
+    echo ":: Running in dev environment"
+else
+    LIB_DIR="$HOME/.local/share/ml4w-dotfiles-installer"
+fi
 
 # 2. Source Modules
 source "$LIB_DIR/colors.sh"
@@ -12,7 +19,7 @@ source "$LIB_DIR/utils.sh"
 # Default settings
 DOTFILES_DIR="$HOME/.mydotfiles"
 TEST_MODE=false
-SCRIPT_VERSION="0.2.2"
+SCRIPT_VERSION="0.2.3"
 
 # --- Check for Installer Config Folder ---
 INSTALLER_CONFIG="$HOME/.config/ml4w-dotfiles-installer"
