@@ -188,6 +188,9 @@ process_package_file() {
             fedora|opensuse)
                 if rpm -q "$pkg" &> /dev/null; then installed=true; fi
                 ;;
+            debian)
+                if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed"; then installed=true; fi
+                ;;
         esac
 
         if [ "$installed" = false ] && command -v "$pkg" &> /dev/null; then
@@ -222,9 +225,15 @@ run_setup_logic() {
         return 1
     fi
     
-    [ -f "$dep_dir/packages" ] && process_package_file "$dep_dir/packages"
     local distro_pkgs="$dep_dir/packages-$distro"
-    [ -f "$distro_pkgs" ] && process_package_file "$distro_pkgs"
+    # On Debian, package names diverge enough that packages-debian is treated
+    # as the complete list and the cross-distro packages file is skipped.
+    if [ "$distro" = "debian" ] && [ -f "$distro_pkgs" ]; then
+        process_package_file "$distro_pkgs"
+    else
+        [ -f "$dep_dir/packages" ] && process_package_file "$dep_dir/packages"
+        [ -f "$distro_pkgs" ] && process_package_file "$distro_pkgs"
+    fi
 
     # 3. Repo Post-installation
     local postflight="$repo_path/setup/post-$distro.sh"
