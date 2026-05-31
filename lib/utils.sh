@@ -291,6 +291,7 @@ read_dotinst() {
     local version=$(echo "$content" | jq -r '.version // "N/A"')
     local tag=$(echo "$content" | jq -r '.tag // empty')
     local git_url_raw=$(echo "$content" | jq -r '.source // empty')
+    local git_url_branch=$(echo "$content" | jq -r '.branch // empty')
     local subfolder=$(echo "$content" | jq -r '.subfolder // empty')
 
     local git_url="${git_url_raw/\$HOME/$HOME}"; git_url="${git_url/\~/$HOME}"
@@ -305,7 +306,13 @@ read_dotinst() {
     echo -e "Name:        $name" >&2
     echo -e "ID:          $id" >&2
     echo -e "Version:     $version" >&2
-    [ -n "$tag" ] && [ "$tag" != "null" ] && echo -e "Tag:         $tag" >&2
+    # Branch or tag, if set
+    if [ -z "$tag" ] && [ -n "$git_url_branch" ]; then
+        tag="$git_url_branch"
+        echo -e "Branch:      $tag" >&2
+    elif [ -n "$tag" ]; then
+        echo -e "Tag:         $tag" >&2
+    fi
     echo -e "Author:      $author" >&2
     echo -e "Homepage:    $homepage" >&2
     echo -e "Source:      $git_url" >&2
