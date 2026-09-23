@@ -92,6 +92,32 @@ ml4w-dotfiles-installer --install ~/Projects/dotfiles/dev.dotinst --testmode
 
 ```
 
+### Setup Scripts & Dependencies
+
+The installer looks for an optional `setup/` folder in the root of your dotfiles repository. All files are optional, and `$distro` is the detected distribution (`arch`, `fedora` or `opensuse`):
+
+```text
+setup/
+├── preflight.sh              # Runs on all distributions
+├── preflight-$distro.sh      # Runs only on the matching distribution
+├── dependencies/
+│   ├── packages              # Packages for all distributions
+│   └── packages-$distro      # Distribution-specific packages
+├── post.sh                   # Runs on all distributions
+└── post-$distro.sh           # Runs only on the matching distribution
+```
+
+**Execution order:**
+
+1. `preflight.sh` → `preflight-$distro.sh`
+2. `packages` → `packages-$distro`
+3. `post.sh` → `post-$distro.sh`
+4. User `post.sh` (see [Personal Overrides](#1-personal-overrides-user-postsh))
+
+General scripts always run before their distribution-specific counterparts, so a distro script can adjust or override what the general script did. All scripts are sourced, so variables and functions defined in a general script are available in the distro script.
+
+> **Tip:** Keep `preflight.sh` limited to checks, backups and prompts. Anything that installs software (e.g. an AUR helper or extra repositories) belongs in `preflight-$distro.sh`.
+
 ---
 
 ## 🛠 Advanced Customization

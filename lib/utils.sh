@@ -212,11 +212,16 @@ run_setup_logic() {
     local dep_dir="$repo_path/setup/dependencies"
     local user_config_dir="$HOME/.config/ml4w-dotfiles-installer/$profile_id"
     
-    # 1. Repo Preflight
-    local preflight="$repo_path/setup/preflight-$distro.sh"
-    if [ -f "$preflight" ]; then 
-        info "Running preflight script $preflight for $distro..."
+    # 1. Repo Preflight (general first, then distro-specific)
+    local preflight="$repo_path/setup/preflight.sh"
+    if [ -f "$preflight" ]; then
+        info "Running preflight script $preflight..."
         source "$preflight"
+    fi
+    local distro_preflight="$repo_path/setup/preflight-$distro.sh"
+    if [ -f "$distro_preflight" ]; then 
+        info "Running preflight script $distro_preflight for $distro..."
+        source "$distro_preflight"
     fi
     
     # 2. Dependencies
@@ -229,11 +234,16 @@ run_setup_logic() {
     local distro_pkgs="$dep_dir/packages-$distro"
     [ -f "$distro_pkgs" ] && process_package_file "$distro_pkgs"
 
-    # 3. Repo Post-installation
-    local postflight="$repo_path/setup/post-$distro.sh"
-    if [ -f "$postflight" ]; then 
-        info "Running post-installation script $postflight for $distro..."
+    # 3. Repo Post-installation (general first, then distro-specific)
+    local postflight="$repo_path/setup/post.sh"
+    if [ -f "$postflight" ]; then
+        info "Running post-installation script $postflight..."
         source "$postflight"
+    fi
+    local distro_postflight="$repo_path/setup/post-$distro.sh"
+    if [ -f "$distro_postflight" ]; then 
+        info "Running post-installation script $distro_postflight for $distro..."
+        source "$distro_postflight"
     fi
 
     # 4. User-specific Post-installation
