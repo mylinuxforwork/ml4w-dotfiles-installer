@@ -156,7 +156,7 @@ Files listed here will be skipped during the staging process, preserving your lo
 
 ## 🔄 Restore & Update Logic
 
-1. **Automatic Profile Backup:** Before updates, your profile folder is backed up to `~/.mydotfiles-test/backups/profile-updates/ID/<timestamp>`.
+1. **Automatic Profile Backup:** Before updates, your profile folder is backed up to `~/.mydotfiles/backups/profile-updates/[PROJECT_ID]/[TIMESTAMP]`.
 2. **Selective Restoration:** Interactive menu via `gum` to select which custom configurations to keep.
 3. **Intelligent Merge:** Selected items are merged into the new source before deployment.
 
@@ -164,9 +164,9 @@ Files listed here will be skipped during the staging process, preserving your lo
 
 ## 🛡 Safety & Backups
 
-The installer uses a highly organized backup system:
+The installer uses a highly organized backup system. All backups are stored in the `backups` folder of the dotfiles directory (`~/.mydotfiles` by default, or the directory set with `--target`):
 
-1. **Symlink Backups:** If a file in `$HOME` is replaced, it is moved to `~/.mydotfiles-test/backups/[PROJECT_ID]/[TIMESTAMP]`.
+1. **Symlink Backups:** If a file or folder in `$HOME` or `$HOME/.config` is replaced by a symlink, it is moved to `~/.mydotfiles/backups/[PROJECT_ID]/[TIMESTAMP]`.
 2. **Active Replacement:** If the installer detects an existing symlink pointing to a *different* project ID, it proactively recreates the link to point to the currently active profile.
 
 ---
