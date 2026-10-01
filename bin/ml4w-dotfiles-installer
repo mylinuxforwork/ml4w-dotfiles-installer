@@ -163,10 +163,17 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
             # Step G: Run migration script
             run_migration "$CLONE_PATH" "$PROFILE_ID"
 
+            echo
+            echo "---------------------------------------------------"
             info "Installation successful! Please reboot your system."
-            info "Logfile: $LOG_FILE"
+            info "You can find the logfile at: $LOG_FILE"
+            echo "---------------------------------------------------"
         else
+            echo
+            echo "----------------------------------------"
             error "Failed to deploy dotfiles."
+            info "You can find the logfile at: $LOG_FILE"
+            echo "----------------------------------------"
             exit 1
         fi
     else
