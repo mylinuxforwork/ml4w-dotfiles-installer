@@ -36,7 +36,14 @@ handle_restore_logic() {
     info "Existing configuration found. Select items to keep (Restore):"
     info "Uncheck items to overwrite with default versions from the update."
     
-    local user_selections=$(echo "$restore_data" | gum choose --no-limit --height 25 --selected="$selected_default")
+    local user_selections
+    if [ "${ML4W_YES:-0}" = "1" ]; then
+        # Non-interactive: keep every item (default selection = all). Scripts
+        # (dot-switch) set ML4W_YES=1; gum can't be answered with typed 'y'.
+        user_selections="$restore_data"
+    else
+        user_selections=$(echo "$restore_data" | gum choose --no-limit --height 25 --selected="$selected_default")
+    fi
 
     if [ -z "$user_selections" ]; then
         warn "No items selected for restoration. Overwriting with all defaults."
@@ -70,6 +77,25 @@ handle_restore_logic() {
     done <<< "$user_selections"
 }
 
+# --- Blacklist Matching Helper ---
+# Returns 0 (true) if rel_path is blacklisted: exact match, path lives under
+# a blacklisted entry, or path is an ancestor of one. The ancestor case
+# matters for symlink deployment — if a subdirectory is blacklisted, its
+# parent must not be linked either, otherwise a partial sandbox would replace
+# real local files.
+is_blacklisted() {
+    local rel_path=$1
+    local blacklist=$2
+    [ -f "$blacklist" ] || return 1
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line=$(echo "$line" | xargs)
+        line="${line%/}"   # normalize trailing slash (README example: .config/my-app/)
+        [[ -z "$line" || "$line" =~ ^# ]] && continue
+        [[ "$rel_path" == "$line" || "$rel_path" == "$line"/* || "$line" == "$rel_path"/* ]] && return 0
+    done < "$blacklist"
+    return 1
+}
+
 # --- RECURSIVE Blacklist-Aware Copy ---
 copy_with_blacklist() {
     local source=$1
@@ -83,6 +109,7 @@ copy_with_blacklist() {
     if [ -f "$blacklist" ]; then
         while IFS= read -r line || [[ -n "$line" ]]; do
             line=$(echo "$line" | xargs)
+            line="${line%/}"   # normalize trailing slash (README example: .config/my-app/)
             [[ -z "$line" || "$line" =~ ^# ]] && continue
             blacklisted+=("$line")
         done < "$blacklist"
@@ -102,9 +129,13 @@ copy_with_blacklist() {
             fi
         done
 
-        if [ "$skip" = true ] && [ -e "$target_path" ]; then
+        # Skip blacklisted entries unconditionally. The previous guard
+        # (`[ -e "$target_path" ]`) only preserved blacklisted paths that
+        # already existed in the sandbox, so a fresh deploy staged them
+        # anyway and they got symlinked over real files.
+        if [ "$skip" = true ]; then
             if [[ "$rel_path" == "$b" ]]; then
-                warn "  - Preserving blacklisted entry: $rel_path"
+                warn "  - Skipping blacklisted entry: $rel_path"
             fi
             continue
         fi
@@ -147,7 +178,7 @@ create_symlink() {
 
 # --- Deployment Orchestrator ---
 deploy_symlinks() {
-    local source_dir=$1; local backup_root=$2; local id=$3
+    local source_dir=$1; local backup_root=$2; local id=$3; local blacklist=$4
     local timestamp=$(date +%Y%m%d_%H%M%S)
     local backup_dir="$backup_root/backups/$id/$timestamp"
 
@@ -156,7 +187,14 @@ deploy_symlinks() {
         local name=$(basename "$item")
         [[ "$name" == "." || "$name" == ".." || "$name" == ".config" ]] && continue
         [ -e "$item" ] || continue
-        
+
+        # Never link blacklisted paths, even if they somehow exist in the
+        # sandbox (e.g. staged by an older version or an empty dir).
+        if is_blacklisted "$name" "$blacklist"; then
+            warn "  - Skipping blacklisted entry: $name"
+            continue
+        fi
+
         create_symlink "$item" "$HOME/$name" "$backup_dir"
     done
 
@@ -166,7 +204,12 @@ deploy_symlinks() {
             local name=$(basename "$item")
             [[ "$name" == "." || "$name" == ".." ]] && continue
             [ -e "$item" ] || continue
-            
+
+            if is_blacklisted ".config/$name" "$blacklist"; then
+                warn "  - Skipping blacklisted entry: .config/$name"
+                continue
+            fi
+
             create_symlink "$item" "$HOME/.config/$name" "$backup_dir"
         done
     fi
@@ -228,14 +271,17 @@ run_setup_logic() {
     fi
     
     # 2. Dependencies
+    # NOTE: a missing dependency folder must NOT abort the rest of setup.
+    # Profiles like ML4W's repo don't ship setup/dependencies, and returning
+    # early here silently skipped step 4 (the user post.sh hook) — which is
+    # where Hyprland 0.56 compat fixes live. Warn and continue instead.
     if [ ! -d "$dep_dir" ]; then 
-        warn "Dependency folder not found at: $dep_dir"
-        return 1
+        warn "Dependency folder not found at: $dep_dir — skipping dependency install (post-install hooks will still run)."
+    else
+        [ -f "$dep_dir/packages" ] && process_package_file "$dep_dir/packages"
+        local distro_pkgs="$dep_dir/packages-$distro"
+        [ -f "$distro_pkgs" ] && process_package_file "$distro_pkgs"
     fi
-    
-    [ -f "$dep_dir/packages" ] && process_package_file "$dep_dir/packages"
-    local distro_pkgs="$dep_dir/packages-$distro"
-    [ -f "$distro_pkgs" ] && process_package_file "$distro_pkgs"
 
     # 3. Repo Post-installation (general first, then distro-specific)
     local postflight="$repo_path/setup/post.sh"
@@ -335,7 +381,7 @@ read_dotinst() {
     echo -e "Description: $description" >&2
     echo -e "${GREEN}--------------------------------------------------${NC}" >&2
 
-    if ! gum confirm "Do you want to proceed with the installation?"; then info "Installation cancelled by user."; exit 0; fi
+    if [ "${ML4W_YES:-0}" != "1" ] && ! gum confirm "Do you want to proceed with the installation?"; then info "Installation cancelled by user."; exit 0; fi
 
     local working_dir=$(mktemp -d -t ml4w-dots-XXXXXX)
     if [ -d "$git_url" ]; then
@@ -345,7 +391,7 @@ read_dotinst() {
         info "Remote repository detected. Cloning source..."
         local clone_cmd="git clone --depth=1"
         [ -n "$tag" ] && [ "$tag" != "null" ] && clone_cmd="git clone --depth=1 --branch $tag"
-        if ! $clone_cmd "$git_url" "$working_dir" &> /dev/null; then 
+        if ! $clone_cmd "$git_url" "$working_dir"; then 
             error "Failed to clone repository."; rm -rf "$working_dir"; return 1
         fi
     fi

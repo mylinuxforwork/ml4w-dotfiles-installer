@@ -145,7 +145,7 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
             info "Successfully updated $PROFILE_ID dotfiles in sandbox."
             
             # Step E: Create symlinks
-            deploy_symlinks "$FINAL_TARGET" "$DOTFILES_DIR" "$PROFILE_ID"
+            deploy_symlinks "$FINAL_TARGET" "$DOTFILES_DIR" "$PROFILE_ID" "$BLACKLIST_FILE"
 
             # Step F: Set active profile
             set_active_profile "$PROFILE_ID"
