@@ -15,6 +15,7 @@ You can find all installation options in the documentation of the ML4W Dotfiles 
 * **Developer Friendly:** Supports local `.dotinst` files and local repository sources for rapid testing.
 * **Test Mode:** Verify package installation and setup logic without touching your files.
 * **User Overrides:** Support for individual user `post.sh` scripts per profile.
+* **Clean Output:** Package installation output is hidden and written to a logfile.
 
 ---
 
@@ -67,6 +68,21 @@ ml4w-dotfiles-installer --install ~/Projects/dotfiles/dev.dotinst --testmode
 
 ```
 
+### 📝 Logfile & Verbose Mode
+
+The output of all package installations is hidden and written to a logfile, while a spinner shows the current progress. Each run creates a new logfile, and the last 10 are kept:
+
+```text
+~/.local/state/ml4w-dotfiles-installer/logs/install-YYYYMMDD_HHMMSS.log
+```
+
+If a package fails to install, the installer continues and lists all failed packages at the end. Check the logfile for details. To show the installation output in the terminal as well, use `--verbose`:
+
+```bash
+ml4w-dotfiles-installer --install ~/Projects/dotfiles/dev.dotinst --verbose
+
+```
+
 ---
 
 ## 🏗 For Content Creators: The `.dotinst` File
@@ -115,6 +131,13 @@ setup/
 4. User `post.sh` (see [Personal Overrides](#1-personal-overrides-user-postsh))
 
 General scripts always run before their distribution-specific counterparts, so a distro script can adjust or override what the general script did. All scripts are sourced, so variables and functions defined in a general script are available in the distro script.
+
+Setup scripts run with visible output. To hide the output of a command and write it to the installer logfile instead, use `run_logged` (with an optional spinner title):
+
+```bash
+ensure_sudo   # ask for the sudo password up front, before the output is hidden
+run_logged --title "Installing yay..." makepkg -si --noconfirm
+```
 
 > **Tip:** Keep `preflight.sh` limited to checks, backups and prompts. Anything that installs software (e.g. an AUR helper or extra repositories) belongs in `preflight-$distro.sh`.
 

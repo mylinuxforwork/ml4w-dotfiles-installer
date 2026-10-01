@@ -223,7 +223,10 @@ process_package_file() {
     local distro=$(get_distro_by_bin)
     info "Processing package list: $(basename "$file")"
 
-    while IFS= read -r pkg || [ -n "$pkg" ]; do
+    # Read the list up front so install commands can't consume the loop's stdin
+    local lines; mapfile -t lines < "$file"
+    local pkg
+    for pkg in "${lines[@]}"; do
         pkg=$(echo "$pkg" | sed 's/#.*//' | xargs); [[ -z "$pkg" ]] && continue
 
         local installed=false
@@ -245,10 +248,13 @@ process_package_file() {
 
         if [ "$installed" = true ]; then
             info "  - $pkg is already installed. Skipping."
+        elif install_package "$pkg"; then
+            info "  ✓ $pkg installed."
         else
-            info "  - Installing $pkg..."; install_package "$pkg"
+            error "  ✗ Failed to install $pkg."
+            FAILED_PACKAGES+=("$pkg")
         fi
-    done < "$file"
+    done
 }
 
 # --- Run setup logic with preflight, dependencies, post-installation and user post script ---
@@ -278,9 +284,14 @@ run_setup_logic() {
     if [ ! -d "$dep_dir" ]; then 
         warn "Dependency folder not found at: $dep_dir — skipping dependency install (post-install hooks will still run)."
     else
+        FAILED_PACKAGES=()
         [ -f "$dep_dir/packages" ] && process_package_file "$dep_dir/packages"
         local distro_pkgs="$dep_dir/packages-$distro"
         [ -f "$distro_pkgs" ] && process_package_file "$distro_pkgs"
+        if [ ${#FAILED_PACKAGES[@]} -gt 0 ]; then
+            warn "${#FAILED_PACKAGES[@]} package(s) could not be installed: ${FAILED_PACKAGES[*]}"
+            warn "See the logfile for details: $LOG_FILE"
+        fi
     fi
 
     # 3. Repo Post-installation (general first, then distro-specific)
@@ -317,11 +328,16 @@ run_migration() {
 # --- Check dotfiles installer dependencies ---
 check_dependencies() {
     info "Checking system dependencies..."
-    check_and_install "make" "make"
-    check_and_install "git" "git"
-    check_and_install "curl" "curl"
-    check_and_install "jq" "jq"
-    check_and_install "gum" "gum"
+    local failed=false
+    check_and_install "make" "make" || failed=true
+    check_and_install "git" "git" || failed=true
+    check_and_install "curl" "curl" || failed=true
+    check_and_install "jq" "jq" || failed=true
+    check_and_install "gum" "gum" || failed=true
+    if [ "$failed" = true ]; then
+        error "Required tools for the installer are missing. Exiting."
+        exit 1
+    fi
 }
 
 # --- Active Profile Tracker ---

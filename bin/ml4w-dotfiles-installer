@@ -19,6 +19,7 @@ source "$LIB_DIR/utils.sh"
 # Default settings
 DOTFILES_DIR="$HOME/.mydotfiles"
 TEST_MODE=false
+VERBOSE=false
 SCRIPT_VERSION="0.3.0"
 
 # --- Check for Installer Config Folder ---
@@ -29,6 +30,7 @@ fi
 
 # 3. Global Cleanup Trap
 cleanup() {
+    stop_sudo_keepalive
     if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
         info "Cleaning up temporary files..."
         rm -rf "$CLONE_PATH"
@@ -50,6 +52,7 @@ show_help() {
     echo "  --install <path/url> Install dotfiles from local path or URL"
     echo "  --target <path>      Target directory (Default: $HOME/.mydotfiles)"
     echo "  --testmode           Run setup logic only (No staging, No symlinks)"
+    echo "  --verbose            Show package installation output (always logged)"
     echo "  --help               Show this help message"
 }
 
@@ -73,6 +76,9 @@ while [[ $# -gt 0 ]]; do
         --testmode)
             TEST_MODE=true
             shift ;;
+        --verbose)
+            VERBOSE=true
+            shift ;;
         --help)
             show_help
             exit 0 ;;
@@ -89,6 +95,9 @@ info "Running ML4W Dotfiles Installer ($SCRIPT_VERSION)..."
 
 # 6. Execute Logic
 [ -z "$INSTALL_URL" ] && { show_help; exit 0; }
+
+init_log
+info "Logfile: $LOG_FILE"
 
 # Step A: Check dependencies for running the script
 check_dependencies
@@ -128,6 +137,7 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
     if [ "$TEST_MODE" = true ]; then
         warn "Test Mode active: Skipping file staging and symlink creation."
         info "Setup logic completed successfully."
+        info "Logfile: $LOG_FILE"
         exit 0
     fi
 
@@ -153,9 +163,17 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
             # Step G: Run migration script
             run_migration "$CLONE_PATH" "$PROFILE_ID"
 
+            echo
+            echo "---------------------------------------------------"
             info "Installation successful! Please reboot your system."
+            info "You can find the logfile at: $LOG_FILE"
+            echo "---------------------------------------------------"
         else
+            echo
+            echo "----------------------------------------"
             error "Failed to deploy dotfiles."
+            info "You can find the logfile at: $LOG_FILE"
+            echo "----------------------------------------"
             exit 1
         fi
     else
