@@ -31,6 +31,11 @@ elif command -v zypper &> /dev/null; then
     DISTRO="opensuse"
     info "openSUSE detected. Installing base dependencies..."
     sudo zypper install -y git make curl jq
+elif command -v apt &> /dev/null; then
+    DISTRO="ubuntu"
+    info "Ubuntu detected. Installing base dependencies..."
+    sudo apt-get update
+    sudo apt-get install -y git make curl jq
 else
     error "Unsupported distribution. Please install git, make, curl, and jq manually."
 fi

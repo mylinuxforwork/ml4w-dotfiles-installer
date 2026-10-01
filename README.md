@@ -1,6 +1,6 @@
 # ML4W Dotfiles Installer
 
-An authentic, modular, and safe way to deploy Linux configurations. This script acts as a professional **Profile Manager** that allows you to manage multiple dotfile setups, handles distribution-specific dependencies for **Arch**, **Fedora**, and **openSUSE**, and uses an intelligent symlinking system with automated backups.
+An authentic, modular, and safe way to deploy Linux configurations. This script acts as a professional **Profile Manager** that allows you to manage multiple dotfile setups, handles distribution-specific dependencies for **Arch**, **Fedora**, **openSUSE**, and **Ubuntu**, and uses an intelligent symlinking system with automated backups.
 
 ## 🛠 Installation and Documentation
 
@@ -8,7 +8,7 @@ You can find all installation options in the documentation of the ML4W Dotfiles 
 
 ## 🚀 Key Features
 
-* **Distro Agnostic:** Detects your package manager (Pacman, DNF, or Zypper) automatically.
+* **Distro Agnostic:** Detects your package manager (Pacman, DNF, Zypper, or APT) automatically.
 * **Safe Sandbox:** Dotfiles are first copied to a local folder before being symlinked to `$HOME`.
 * **Proactive Symlinking:** Automatically detects if a symlink points to a different ID and replaces it.
 * **Automated Backups:** Full profile snapshots and symlink backups organized by Project ID and Timestamp.
@@ -94,7 +94,7 @@ ml4w-dotfiles-installer --install ~/Projects/dotfiles/dev.dotinst --testmode
 
 ### Setup Scripts & Dependencies
 
-The installer looks for an optional `setup/` folder in the root of your dotfiles repository. All files are optional, and `$distro` is the detected distribution (`arch`, `fedora` or `opensuse`):
+The installer looks for an optional `setup/` folder in the root of your dotfiles repository. All files are optional, and `$distro` is the detected distribution (`arch`, `fedora`, `opensuse` or `ubuntu`):
 
 ```text
 setup/

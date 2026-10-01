@@ -191,6 +191,9 @@ process_package_file() {
             fedora|opensuse)
                 if rpm -q "$pkg" &> /dev/null; then installed=true; fi
                 ;;
+            ubuntu)
+                if dpkg-query -W -f='${Status}' "$pkg" 2> /dev/null | grep -q "install ok installed"; then installed=true; fi
+                ;;
         esac
 
         if [ "$installed" = false ] && command -v "$pkg" &> /dev/null; then

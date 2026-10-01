@@ -5,6 +5,7 @@ get_distro_by_bin() {
     if command -v pacman &> /dev/null; then echo "arch";
     elif command -v dnf &> /dev/null; then echo "fedora";
     elif command -v zypper &> /dev/null; then echo "opensuse";
+    elif command -v apt &> /dev/null; then echo "ubuntu";
     else echo "unknown"; fi
 }
 
@@ -18,6 +19,7 @@ check_and_install() {
         arch) install_cmd="sudo pacman -S --needed --noconfirm $pkg" ;;
         fedora) install_cmd="sudo dnf install -y $pkg" ;;
         opensuse) install_cmd="sudo zypper install -y $pkg" ;;
+        ubuntu) install_cmd="sudo apt-get install -y $pkg" ;;
         *) error "Unsupported distro."; return 1 ;;
     esac
 
@@ -39,6 +41,7 @@ install_package() {
         arch) sudo pacman -S --needed --noconfirm "$pkg" ;;
         fedora) sudo dnf install -y "$pkg" ;;
         opensuse) sudo zypper install -y "$pkg" ;;
+        ubuntu) sudo apt-get install -y "$pkg" ;;
     esac
 }
 
