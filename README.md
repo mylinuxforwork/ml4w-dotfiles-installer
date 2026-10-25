@@ -119,6 +119,9 @@ setup/
 ├── dependencies/
 │   ├── packages              # Packages for all distributions
 │   └── packages-$distro      # Distribution-specific packages
+├── packages/
+│   ├── packages              # Initial installation only: all distributions
+│   └── packages-$distro      # Initial installation only: distribution-specific
 ├── post.sh                   # Runs on all distributions
 └── post-$distro.sh           # Runs only on the matching distribution
 ```
@@ -126,9 +129,12 @@ setup/
 **Execution order:**
 
 1. `preflight.sh` → `preflight-$distro.sh`
-2. `packages` → `packages-$distro`
-3. `post.sh` → `post-$distro.sh`
-4. User `post.sh` (see [Personal Overrides](#1-personal-overrides-user-postsh))
+2. `dependencies/packages` → `dependencies/packages-$distro`
+3. `packages/packages` → `packages/packages-$distro` (initial installation only)
+4. `post.sh` → `post-$distro.sh`
+5. User `post.sh` (see [Personal Overrides](#1-personal-overrides-user-postsh))
+
+Dependencies are checked and installed on every run, including updates. Use them for packages the dotfiles need to work. Packages in `packages/` are installed only on the initial installation and skipped on updates (when the profile already exists in the target directory). Use them for suggested applications such as a browser or editor, so users can uninstall or replace them without an update reinstalling them.
 
 General scripts always run before their distribution-specific counterparts, so a distro script can adjust or override what the general script did. All scripts are sourced, so variables and functions defined in a general script are available in the distro script.
 
