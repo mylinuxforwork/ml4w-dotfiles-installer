@@ -20,7 +20,7 @@ source "$LIB_DIR/utils.sh"
 DOTFILES_DIR="$HOME/.mydotfiles"
 TEST_MODE=false
 VERBOSE=false
-SCRIPT_VERSION="0.3.0"
+SCRIPT_VERSION="0.3.1"
 
 # --- Check for Installer Config Folder ---
 INSTALLER_CONFIG="$HOME/.config/ml4w-dotfiles-installer"
@@ -118,8 +118,12 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
 
     FINAL_TARGET="$DOTFILES_DIR/$PROFILE_ID"
 
+    # An existing profile folder means this is an update, not an initial installation
+    IS_UPDATE=false
+    [ -d "$FINAL_TARGET" ] && IS_UPDATE=true
+
     # --- Step B.5: Update-specific Logic (Backup & Restore) ---
-    if [ -d "$FINAL_TARGET" ] && [ "$TEST_MODE" = false ]; then
+    if [ "$IS_UPDATE" = true ] && [ "$TEST_MODE" = false ]; then
         backup_existing_profile "$FINAL_TARGET" "$PROFILE_ID" "$DOTFILES_DIR"
 
         DOTINST_JSON=$(get_json_content "$INSTALL_URL")
@@ -131,7 +135,7 @@ if [ -n "$CLONE_PATH" ] && [ -d "$CLONE_PATH" ]; then
     fi
 
     info "Repository prepared. Starting package setup..."
-    run_setup_logic "$CLONE_PATH" "$PROFILE_ID"
+    run_setup_logic "$CLONE_PATH" "$PROFILE_ID" "$IS_UPDATE"
     
     # --- Step C: Test Mode Exit ---
     if [ "$TEST_MODE" = true ]; then

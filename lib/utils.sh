@@ -221,7 +221,7 @@ deploy_symlinks() {
 process_package_file() {
     local file=$1; [ ! -f "$file" ] && return 0
     local distro=$(get_distro_by_bin)
-    info "Processing package list: $(basename "$file")"
+    info "Processing package list: $(basename "$(dirname "$file")")/$(basename "$file")"
 
     # Read the list up front so install commands can't consume the loop's stdin
     local lines; mapfile -t lines < "$file"
@@ -257,11 +257,19 @@ process_package_file() {
     done
 }
 
-# --- Run setup logic with preflight, dependencies, post-installation and user post script ---
+# --- Install the packages listed in a folder (general list first, then distro-specific) ---
+process_package_dir() {
+    local dir=$1; local distro=$2
+    [ -f "$dir/packages" ] && process_package_file "$dir/packages"
+    [ -f "$dir/packages-$distro" ] && process_package_file "$dir/packages-$distro"
+}
+
+# --- Run setup logic with preflight, dependencies, packages, post-installation and user post script ---
 run_setup_logic() {
-    local repo_path=$1; local profile_id=$2
+    local repo_path=$1; local profile_id=$2; local is_update=${3:-false}
     local distro=$(get_distro_by_bin)
     local dep_dir="$repo_path/setup/dependencies"
+    local pkg_dir="$repo_path/setup/packages"
     local user_config_dir="$HOME/.config/ml4w-dotfiles-installer/$profile_id"
     
     # 1. Repo Preflight (general first, then distro-specific)
@@ -276,6 +284,8 @@ run_setup_logic() {
         source "$distro_preflight"
     fi
     
+    FAILED_PACKAGES=()
+
     # 2. Dependencies
     # NOTE: a missing dependency folder must NOT abort the rest of setup.
     # Profiles like ML4W's repo don't ship setup/dependencies, and returning
@@ -284,14 +294,24 @@ run_setup_logic() {
     if [ ! -d "$dep_dir" ]; then 
         warn "Dependency folder not found at: $dep_dir — skipping dependency install (post-install hooks will still run)."
     else
-        FAILED_PACKAGES=()
-        [ -f "$dep_dir/packages" ] && process_package_file "$dep_dir/packages"
-        local distro_pkgs="$dep_dir/packages-$distro"
-        [ -f "$distro_pkgs" ] && process_package_file "$distro_pkgs"
-        if [ ${#FAILED_PACKAGES[@]} -gt 0 ]; then
-            warn "${#FAILED_PACKAGES[@]} package(s) could not be installed: ${FAILED_PACKAGES[*]}"
-            warn "See the logfile for details: $LOG_FILE"
+        process_package_dir "$dep_dir" "$distro"
+    fi
+
+    # 2.5 Packages (initial installation only)
+    # Unlike dependencies, these are only installed once so that users can
+    # remove them afterwards (e.g. swap firefox for chromium) without every
+    # update reinstalling them.
+    if [ -d "$pkg_dir" ]; then
+        if [ "$is_update" = true ]; then
+            info "Update detected: skipping packages from $pkg_dir."
+        else
+            process_package_dir "$pkg_dir" "$distro"
         fi
+    fi
+
+    if [ ${#FAILED_PACKAGES[@]} -gt 0 ]; then
+        warn "${#FAILED_PACKAGES[@]} package(s) could not be installed: ${FAILED_PACKAGES[*]}"
+        warn "See the logfile for details: $LOG_FILE"
     fi
 
     # 3. Repo Post-installation (general first, then distro-specific)
